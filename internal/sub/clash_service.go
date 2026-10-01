@@ -14,6 +14,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/singbox"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
 )
@@ -575,12 +576,10 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 }
 
 // buildAnyTLSProxy renders a sing-box anytls inbound as a mihomo anytls node.
+// The credential comes from the inbound's own settings.clients[] (per-machine
+// password per customer).
 func (s *SubClashService) buildAnyTLSProxy(subReq *SubService, inbound *model.Inbound, client model.Client, ep map[string]any) map[string]any {
-	// AnyTLS uses the shared client's Password field
-	password := client.Password
-	if password == "" {
-		password = client.Auth
-	}
+	password := singboxCredentialFor(inbound, client.Email)
 	if password == "" {
 		return nil
 	}
@@ -617,14 +616,10 @@ func (s *SubClashService) buildAnyTLSProxy(subReq *SubService, inbound *model.In
 }
 
 // buildSingboxHysteria2Proxy renders a sing-box hysteria2 inbound (protocol
-// hysteria2sb) as a mihomo hysteria2 node.
+// hysteria2sb) as a mihomo hysteria2 node. Credential from the inbound's own
+// settings.clients[].
 func (s *SubClashService) buildSingboxHysteria2Proxy(subReq *SubService, inbound *model.Inbound, client model.Client, ep map[string]any) map[string]any {
-	// Hysteria2 uses the shared client's Auth field (Hysteria family
-	// convention); fall back to Password for panel-created clients.
-	password := client.Auth
-	if password == "" {
-		password = client.Password
-	}
+	password := singboxCredentialFor(inbound, client.Email)
 	if password == "" {
 		return nil
 	}

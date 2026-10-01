@@ -9,8 +9,14 @@ import (
 )
 
 // InboundSettings is the JSON stored in an anytls/hysteria2sb inbound's
-// Settings field (structural half only; clients live in the shared clients
-// tables exactly as for Xray protocols).
+// Settings field.
+//
+// Credentials live in Clients here — NOT in the shared clients table — because
+// one customer legitimately holds a different sing-box password per machine
+// (DMIT-AnyTLS vs LA-AnyTLS). The shared row carries identity, quota and
+// expiry; the inbound row carries the credential for the machine it runs on.
+// Node sync already ships this JSON verbatim, so a master-managed inbound
+// arrives at its node with the correct per-machine passwords intact.
 type InboundSettings struct {
 	ServerName      string   `json:"server_name"`
 	ALPN            []string `json:"alpn"`
@@ -22,6 +28,26 @@ type InboundSettings struct {
 	DownMps      int    `json:"down_mps"`
 	ObfsType     string `json:"obfs_type"`
 	ObfsPassword string `json:"obfs_password"`
+	// clients: [{email, password|auth, enable, ...}]
+	Clients []InboundClient `json:"clients"`
+}
+
+// InboundClient is one credential entry inside an inbound's settings.
+type InboundClient struct {
+	Email    string `json:"email"`
+	Password string `json:"password,omitempty"`
+	Auth     string `json:"auth,omitempty"`
+	Enable   *bool  `json:"enable,omitempty"`
+}
+
+// Credential resolves the sing-box password for this entry, accepting either
+// field so a master row written by either the panel form (password) or the
+// hysteria-style field (auth) works.
+func (c InboundClient) Credential() string {
+	if strings.TrimSpace(c.Password) != "" {
+		return c.Password
+	}
+	return c.Auth
 }
 
 // ClashAPIAddr is the loopback clash-api controller (kept for UI/preview use).
@@ -32,15 +58,29 @@ const ClashAPIAddr = "127.0.0.1:19090"
 // built with the `with_v2ray_api` tag (the fork ships one).
 const V2RayAPIAddr = "127.0.0.1:19091"
 
-// RenderInput is one sing-box inbound with its enabled clients.
+// RenderInput is one sing-box inbound with the enable state of its clients.
+// Enabled comes from client_traffics (shared quota/expiry enforcement);
+// the credential comes from the inbound's own settings.
 type RenderInput struct {
 	Inbound model.Inbound
-	Clients []model.Client
+	// Enabled maps client email -> whether quota/expiry still allows it.
+	// A missing email is treated as enabled.
+	Enabled map[string]bool
 }
 
-// RenderConfig builds the sing-box JSON for the given local sing-box
-// inbounds. Callers pass clients already filtered to enabled ones
-// (quota/expiry semantics identical to the Xray path).
+// ParseInboundClients extracts the credential entries from an inbound's
+// settings JSON.
+func ParseInboundClients(settings string) ([]InboundClient, InboundSettings, error) {
+	var s InboundSettings
+	if strings.TrimSpace(settings) != "" {
+		if err := json.Unmarshal([]byte(settings), &s); err != nil {
+			return nil, s, err
+		}
+	}
+	return s.Clients, s, nil
+}
+
+// RenderConfig builds the sing-box JSON for the given local sing-box inbounds.
 func RenderConfig(inputs []RenderInput, clashSecret string) ([]byte, error) {
 	if len(inputs) == 0 {
 		return nil, nil
@@ -69,25 +109,28 @@ func RenderConfig(inputs []RenderInput, clashSecret string) ([]byte, error) {
 		if !in.Enable || !in.Protocol.IsSingbox() || in.NodeID != nil {
 			continue
 		}
-		var s InboundSettings
-		if in.Settings != "" {
-			if err := json.Unmarshal([]byte(in.Settings), &s); err != nil {
-				return nil, fmt.Errorf("inbound %s: bad settings json: %w", in.Tag, err)
-			}
+		entryClients, s, err := ParseInboundClients(in.Settings)
+		if err != nil {
+			return nil, fmt.Errorf("inbound %s: bad settings json: %w", in.Tag, err)
 		}
 
-		users := make([]SBUser, 0)
-		for _, c := range input.Clients {
-			// Credential field follows the 3x-ui convention: AnyTLS is a
-			// Trojan-style password protocol (Password), Hysteria2 is the
-			// Hysteria family (Auth). One client row therefore carries a
-			// distinct credential per sing-box protocol, like a client
-			// attached to both a VLESS and a Hysteria inbound.
-			pw := singboxClientCredential(in.Protocol, c)
-			if pw == "" || !c.Enable {
+		users := make([]SBUser, 0, len(entryClients))
+		for _, ec := range entryClients {
+			if ec.Email == "" {
 				continue
 			}
-			users = append(users, SBUser{Password: pw, Name: c.Email})
+			// disabled by its own flag, or by quota/expiry enforcement
+			if ec.Enable != nil && !*ec.Enable {
+				continue
+			}
+			if enabled, known := input.Enabled[ec.Email]; known && !enabled {
+				continue
+			}
+			pw := ec.Credential()
+			if pw == "" {
+				continue
+			}
+			users = append(users, SBUser{Password: pw, Name: ec.Email})
 		}
 		if len(users) == 0 {
 			// sing-box rejects empty user arrays for these protocols;
@@ -150,42 +193,31 @@ func sbType(p model.Protocol) string {
 	return "anytls"
 }
 
-// singboxClientCredential returns the credential a sing-box protocol reads
-// from a shared client row. Convention (mirrors upstream's field-per-protocol
-// habits): AnyTLS → Password, Hysteria2 → Auth. Auth falls back to Password so
-// a client created through the panel's generic form (which fills Password)
-// still works on Hysteria2 without a manual edit.
-func singboxClientCredential(p model.Protocol, c model.Client) string {
-	if p == model.Hysteria2SB {
-		if c.Auth != "" {
-			return c.Auth
-		}
-		return c.Password
-	}
-	if c.Password != "" {
-		return c.Password
-	}
-	return c.Auth
-}
-
 // inboundTags returns the enabled sing-box inbound tags (stats.inbounds).
 func inboundTags(inputs []RenderInput) []string {
 	tags := make([]string, 0, len(inputs))
 	for _, in := range inputs {
-		if in.Inbound.Enable && in.Inbound.Protocol.IsSingbox() && in.Inbound.NodeID == nil && len(in.Clients) > 0 {
-			tags = append(tags, in.Inbound.Tag)
+		if in.Inbound.Enable && in.Inbound.Protocol.IsSingbox() && in.Inbound.NodeID == nil {
+			clients, _, err := ParseInboundClients(in.Inbound.Settings)
+			if err == nil && len(clients) > 0 {
+				tags = append(tags, in.Inbound.Tag)
+			}
 		}
 	}
 	return tags
 }
 
-// userEmails returns every enabled client email across sing-box inbounds
+// userEmails returns every client email across sing-box inbounds
 // (stats.users — per-user cumulative counters, the Xray-equivalent).
 func userEmails(inputs []RenderInput) []string {
 	seen := make(map[string]bool)
 	emails := make([]string, 0)
 	for _, in := range inputs {
-		for _, c := range in.Clients {
+		clients, _, err := ParseInboundClients(in.Inbound.Settings)
+		if err != nil {
+			continue
+		}
+		for _, c := range clients {
 			if c.Email != "" && !seen[c.Email] {
 				seen[c.Email] = true
 				emails = append(emails, c.Email)

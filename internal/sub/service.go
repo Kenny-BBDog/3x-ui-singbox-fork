@@ -22,6 +22,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/singbox"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
@@ -849,21 +850,13 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 }
 
 // genAnyTLSLink builds the anytls:// share link for a sing-box anytls inbound.
-// Settings JSON carries server_name/cert paths; the client credential is its
-// password (falling back to the hysteria auth field for shared identities).
+// The credential lives in the inbound's own settings.clients[] — one password
+// per machine per customer (see internal/singbox.InboundSettings).
 func (s *SubService) genAnyTLSLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.AnyTLS {
 		return ""
 	}
-	client, ok := s.clientForLink(inbound, email)
-	if !ok {
-		return ""
-	}
-	// AnyTLS reads the shared client's Password field
-	password := client.Password
-	if password == "" {
-		password = client.Auth
-	}
+	password := singboxCredentialFor(inbound, email)
 	if password == "" {
 		return ""
 	}
@@ -901,16 +894,7 @@ func (s *SubService) genSingboxHysteria2Link(inbound *model.Inbound, email strin
 	if inbound.Protocol != model.Hysteria2SB {
 		return ""
 	}
-	client, ok := s.clientForLink(inbound, email)
-	if !ok {
-		return ""
-	}
-	// Hysteria2 reads the shared client's Auth field (Hysteria family
-	// convention); fall back to Password for panel-created clients.
-	password := client.Auth
-	if password == "" {
-		password = client.Password
-	}
+	password := singboxCredentialFor(inbound, email)
 	if password == "" {
 		return ""
 	}
@@ -946,6 +930,24 @@ func (s *SubService) genSingboxHysteria2Link(inbound *model.Inbound, email strin
 	host := s.resolveInboundAddress(inbound)
 	link := fmt.Sprintf("hysteria2://%s@%s", encodeUserinfo(password), joinHostPort(host, inbound.Port))
 	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", ""))
+}
+
+// singboxCredentialFor reads one client's sing-box password out of the inbound's
+// settings.clients[]. Empty email means "the only client", which is how the
+// per-inbound QR/allLinks export calls this.
+func singboxCredentialFor(inbound *model.Inbound, email string) string {
+	clients, _, err := singbox.ParseInboundClients(inbound.Settings)
+	if err != nil {
+		return ""
+	}
+	for _, c := range clients {
+		if email == "" || strings.EqualFold(c.Email, email) {
+			if pw := c.Credential(); pw != "" {
+				return pw
+			}
+		}
+	}
+	return ""
 }
 
 func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {

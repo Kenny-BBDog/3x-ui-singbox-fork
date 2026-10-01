@@ -48,6 +48,11 @@ func (s *SingboxService) HasSingboxInbounds() bool {
 // GetSingboxConfig renders the sing-box config from DB state — the exact
 // counterpart of XrayService.GetXrayConfig, including the quota/expiry
 // enable-map semantics.
+//
+// Credentials come from each inbound's own settings.clients[] (a customer holds
+// a different sing-box password per machine), while enable/disable comes from
+// the shared client_traffics rows — so quota and expiry still enforce across
+// every protocol and every node the customer is attached to.
 func (s *SingboxService) GetSingboxConfig() ([]byte, error) {
 	inbounds, err := s.inboundService.GetAllInbounds()
 	if err != nil {
@@ -58,26 +63,13 @@ func (s *SingboxService) GetSingboxConfig() ([]byte, error) {
 		if !in.Protocol.IsSingbox() || in.NodeID != nil {
 			continue
 		}
-		enableMap := make(map[string]bool)
+		// enableMap mirrors the Xray path: a client disabled by quota or
+		// expiry is dropped from the running config.
+		enabled := make(map[string]bool, len(in.ClientStats))
 		for _, st := range in.ClientStats {
-			enableMap[st.Email] = st.Enable
+			enabled[st.Email] = st.Enable
 		}
-		clients, err := s.clientService.ListForInbound(nil, in.Id)
-		if err != nil {
-			return nil, err
-		}
-		kept := make([]model.Client, 0, len(clients))
-		for _, c := range clients {
-			if enable, exists := enableMap[c.Email]; exists && !enable {
-				logger.Infof("singbox: dropping client %s on %s due to expiration or traffic limit", c.Email, in.Tag)
-				continue
-			}
-			if !c.Enable {
-				continue
-			}
-			kept = append(kept, c)
-		}
-		inputs = append(inputs, singbox.RenderInput{Inbound: *in, Clients: kept})
+		inputs = append(inputs, singbox.RenderInput{Inbound: *in, Enabled: enabled})
 	}
 	return singbox.RenderConfig(inputs, s.clashSecret())
 }
