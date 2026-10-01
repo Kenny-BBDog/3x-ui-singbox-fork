@@ -1,0 +1,1 @@
+import{Jn as e}from"./vendor-Cf1bpQKm.js";var t=e([``,`xtls-rprx-vision`,`xtls-rprx-vision-udp443`]),n=Object.freeze({VISION:`xtls-rprx-vision`,VISION_UDP443:`xtls-rprx-vision-udp443`});export{n,t};
