@@ -2146,6 +2146,15 @@ func applyShareRealityParams(stream map[string]any, params map[string]string, cl
 		if pbkValue, ok := searchKey(realitySettings, "publicKey"); ok {
 			params["pbk"], _ = pbkValue.(string)
 		}
+		// Hand-made inbounds store only privateKey; derive pbk so the share
+		// link is not emitted without the key REALITY handshakes require.
+		if params["pbk"] == "" {
+			if priv, ok := searchKey(realitySetting, "privateKey"); ok {
+				if privStr, ok := priv.(string); ok {
+					params["pbk"] = realityPublicKeyFromPrivate(privStr)
+				}
+			}
+		}
 		if sidValue, ok := searchKey(realitySetting, "shortIds"); ok {
 			if shortIds, _ := sidValue.([]any); len(shortIds) > 0 {
 				params["sid"], _ = shortIds[random.Num(len(shortIds))].(string)

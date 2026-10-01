@@ -1345,7 +1345,9 @@ func (s *SubClashService) tlsData(tData map[string]any) map[string]any {
 func (s *SubClashService) realityData(rData map[string]any) map[string]any {
 	rDataOut := make(map[string]any, 1)
 	realityClientSettings, _ := rData["settings"].(map[string]any)
-	if publicKey, ok := realityClientSettings["publicKey"].(string); ok {
+	// A hand-made inbound can lack settings.publicKey; derive it from the
+	// inbound's privateKey so the profile is not rejected as incomplete.
+	if publicKey := realityPublicKeyFor(realityClientSettings, rData); publicKey != "" {
 		rDataOut["publicKey"] = publicKey
 	}
 	if fingerprint, ok := realityClientSettings["fingerprint"].(string); ok {
