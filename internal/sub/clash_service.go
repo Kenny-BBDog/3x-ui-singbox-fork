@@ -1386,9 +1386,20 @@ func mergeClashRulesYAML(base map[string]any, raw string) error {
 		mergeClashRules(base, typed)
 	case map[string]any:
 		for key, value := range typed {
-			if key == "rules" {
+			switch key {
+			case "rules":
 				if ruleList, ok := asAnySlice(value); ok {
 					mergeClashRules(base, ruleList)
+				}
+				continue
+			case "proxies":
+				// Append, do not replace: the panel's own nodes (REALITY,
+				// AnyTLS, Hysteria2) are generated per subscriber and must
+				// survive a custom rules document that adds nodes such as the
+				// residential SOCKS5 pool.
+				if extra, ok := asAnySlice(value); ok {
+					baseProxies, _ := asAnySlice(base["proxies"])
+					base["proxies"] = mergeClashProxies(baseProxies, extra)
 				}
 				continue
 			}
@@ -1399,6 +1410,57 @@ func mergeClashRulesYAML(base map[string]any, raw string) error {
 	}
 
 	return nil
+}
+
+// mergeClashProxies appends custom proxies after the generated ones. A custom
+// entry whose name matches a generated node replaces it in place, so an
+// operator can override e.g. a node's dialer-proxy or TLS pin without
+// duplicating it.
+func mergeClashProxies(baseProxies, customProxies []any) []any {
+	if len(customProxies) == 0 {
+		return baseProxies
+	}
+	customByName := make(map[string]any, len(customProxies))
+	customOrder := make([]string, 0, len(customProxies))
+	for _, proxy := range customProxies {
+		name := clashProxyName(proxy)
+		if name == "" {
+			continue
+		}
+		if _, seen := customByName[name]; seen {
+			continue
+		}
+		customByName[name] = proxy
+		customOrder = append(customOrder, name)
+	}
+
+	merged := make([]any, 0, len(baseProxies)+len(customProxies))
+	replaced := make(map[string]struct{}, len(customOrder))
+	for _, proxy := range baseProxies {
+		name := clashProxyName(proxy)
+		if override, ok := customByName[name]; ok && name != "" {
+			merged = append(merged, override)
+			replaced[name] = struct{}{}
+			continue
+		}
+		merged = append(merged, proxy)
+	}
+	for _, name := range customOrder {
+		if _, done := replaced[name]; done {
+			continue
+		}
+		merged = append(merged, customByName[name])
+	}
+	return merged
+}
+
+func clashProxyName(value any) string {
+	proxy, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	name, _ := proxy["name"].(string)
+	return strings.TrimSpace(name)
 }
 
 // mergeRemoteClashRules lets remote update only the route graph (see
