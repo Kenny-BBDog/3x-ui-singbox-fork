@@ -882,6 +882,35 @@ func (s *SubService) genAnyTLSLink(inbound *model.Inbound, email string) string 
 		params["insecure"] = "0"
 	}
 
+	// Host rows (and legacy externalProxy) override the published endpoint —
+	// without this the link falls back to the inbound's unroutable listen addr.
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	externalProxies, _ := stream["externalProxy"].([]any)
+	if len(externalProxies) > 0 {
+		links := make([]string, 0, len(externalProxies))
+		for _, externalProxy := range externalProxies {
+			ep, ok := externalProxy.(map[string]any)
+			if !ok {
+				continue
+			}
+			dest, _ := ep["dest"].(string)
+			portF, okPort := ep["port"].(float64)
+			if dest == "" || !okPort {
+				continue
+			}
+			epParams := cloneStringMap(params)
+			if sni, ok := externalProxySNI(ep); ok {
+				epParams["sni"] = sni
+			}
+			if alpn, ok := externalProxyALPN(ep["alpn"]); ok {
+				epParams["alpn"] = alpn
+			}
+			link := fmt.Sprintf("anytls://%s@%s", encodeUserinfo(password), joinHostPort(dest, int(portF)))
+			links = append(links, buildLinkWithParams(link, epParams, s.endpointRemark(inbound, email, ep, "")))
+		}
+		return strings.Join(links, "\n")
+	}
+
 	host := s.resolveInboundAddress(inbound)
 	link := fmt.Sprintf("anytls://%s@%s", encodeUserinfo(password), joinHostPort(host, inbound.Port))
 	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", ""))
@@ -925,6 +954,34 @@ func (s *SubService) genSingboxHysteria2Link(inbound *model.Inbound, email strin
 		params["insecure"] = "1"
 	} else {
 		params["insecure"] = "0"
+	}
+
+	// Host rows override the published endpoint (same reason as genAnyTLSLink).
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	externalProxies, _ := stream["externalProxy"].([]any)
+	if len(externalProxies) > 0 {
+		links := make([]string, 0, len(externalProxies))
+		for _, externalProxy := range externalProxies {
+			ep, ok := externalProxy.(map[string]any)
+			if !ok {
+				continue
+			}
+			dest, _ := ep["dest"].(string)
+			portF, okPort := ep["port"].(float64)
+			if dest == "" || !okPort {
+				continue
+			}
+			epParams := cloneStringMap(params)
+			if sni, ok := externalProxySNI(ep); ok {
+				epParams["sni"] = sni
+			}
+			if alpn, ok := externalProxyALPN(ep["alpn"]); ok {
+				epParams["alpn"] = alpn
+			}
+			link := fmt.Sprintf("hysteria2://%s@%s", encodeUserinfo(password), joinHostPort(dest, int(portF)))
+			links = append(links, buildLinkWithParams(link, epParams, s.endpointRemark(inbound, email, ep, "")))
+		}
+		return strings.Join(links, "\n")
 	}
 
 	host := s.resolveInboundAddress(inbound)

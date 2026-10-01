@@ -598,6 +598,16 @@ func (s *SubClashService) buildAnyTLSProxy(subReq *SubService, inbound *model.In
 		"password": password,
 		"tls":      true,
 	}
+	// Host/externalProxy overrides the published endpoint.
+	if dest, ok := ep["dest"].(string); ok && dest != "" {
+		proxy["server"] = dest
+	}
+	if portF, ok := ep["port"].(float64); ok && portF > 0 {
+		proxy["port"] = int(portF)
+	}
+	if proxy["server"] == "" || proxy["server"] == "0.0.0.0" || proxy["server"] == "::" {
+		proxy["server"] = subReq.resolveInboundAddress(inbound)
+	}
 	if settings.ServerName != "" {
 		proxy["sni"] = settings.ServerName
 	}
@@ -639,6 +649,16 @@ func (s *SubClashService) buildSingboxHysteria2Proxy(subReq *SubService, inbound
 		"port":     inbound.Port,
 		"udp":      true,
 		"password": password,
+	}
+	// Host/externalProxy overrides the published endpoint.
+	if dest, ok := ep["dest"].(string); ok && dest != "" {
+		proxy["server"] = dest
+	}
+	if portF, ok := ep["port"].(float64); ok && portF > 0 {
+		proxy["port"] = int(portF)
+	}
+	if proxy["server"] == "" || proxy["server"] == "0.0.0.0" || proxy["server"] == "::" {
+		proxy["server"] = subReq.resolveInboundAddress(inbound)
 	}
 	if settings.ServerName != "" {
 		proxy["sni"] = settings.ServerName
