@@ -603,6 +603,12 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			inboundSvc.applyLocalAmneziaWG(oldInbound.Id)
 		} else if oldInbound.Protocol == model.TUIC {
 			inboundSvc.applyLocalTuic(oldInbound.Id)
+		} else if oldInbound.Protocol.IsSingbox() {
+			// sing-box credentials live in the inbound's own settings.clients[]
+			// (one password per machine per customer), so a client change has to
+			// ride the whole-inbound reconcile — pushing the shared client row's
+			// password would write the wrong machine's credential. The 10s
+			// reconcile job picks this up from the DB.
 		} else {
 			for _, client := range clients {
 				if len(client.Email) == 0 {
@@ -643,6 +649,13 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		// settings already hold the final set, so mark dirty and let one reconcile
 		// push converge the node instead.
 		if push && len(clients) > nodeBulkPushThreshold {
+			push = false
+		}
+		// sing-box credentials are per-machine and live in settings.clients[],
+		// not in the shared client row: /clients/add would push THIS panel's
+		// password onto the node. Always converge via the whole-inbound
+		// reconcile instead, which carries the node's own credentials.
+		if push && oldInbound.Protocol.IsSingbox() {
 			push = false
 		}
 		for _, client := range clients {
