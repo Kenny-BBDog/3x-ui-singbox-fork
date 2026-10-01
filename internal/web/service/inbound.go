@@ -1224,6 +1224,12 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
 			}
+		case "anytls", "hysteria2sb":
+			// sing-box protocols authenticate with a plain password (no UUID);
+			// the credential arrives inside settings.clients[] on a node push.
+			if client.Password == "" && client.Auth == "" {
+				return inbound, false, common.NewError("client requires a password")
+			}
 		default:
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
