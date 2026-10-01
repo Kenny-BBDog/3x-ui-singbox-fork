@@ -187,7 +187,18 @@ func (p *Process) start() error {
 	if _, err := os.Stat(p.configPath); err != nil {
 		return fmt.Errorf("sing-box config not found at %s", p.configPath)
 	}
-	cmd := exec.Command(bin, "run", "-D", filepath.Dir(p.configPath), "-c", p.configPath)
+	// Both paths must be absolute: sing-box chdirs into -D before it opens
+	// -c, so a relative config path would be resolved twice (once against the
+	// panel's cwd, again against the new working directory).
+	binAbs, err := filepath.Abs(bin)
+	if err != nil {
+		return err
+	}
+	cfgAbs, err := filepath.Abs(p.configPath)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(binAbs, "run", "-D", filepath.Dir(cfgAbs), "-c", cfgAbs)
 	cmd.Stdout = &procLogWriter{}
 	cmd.Stderr = &procLogWriter{}
 	if err := cmd.Start(); err != nil {
