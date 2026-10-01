@@ -576,6 +576,7 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 
 // buildAnyTLSProxy renders a sing-box anytls inbound as a mihomo anytls node.
 func (s *SubClashService) buildAnyTLSProxy(subReq *SubService, inbound *model.Inbound, client model.Client, ep map[string]any) map[string]any {
+	// AnyTLS uses the shared client's Password field
 	password := client.Password
 	if password == "" {
 		password = client.Auth
@@ -618,9 +619,11 @@ func (s *SubClashService) buildAnyTLSProxy(subReq *SubService, inbound *model.In
 // buildSingboxHysteria2Proxy renders a sing-box hysteria2 inbound (protocol
 // hysteria2sb) as a mihomo hysteria2 node.
 func (s *SubClashService) buildSingboxHysteria2Proxy(subReq *SubService, inbound *model.Inbound, client model.Client, ep map[string]any) map[string]any {
-	password := client.Password
+	// Hysteria2 uses the shared client's Auth field (Hysteria family
+	// convention); fall back to Password for panel-created clients.
+	password := client.Auth
 	if password == "" {
-		password = client.Auth
+		password = client.Password
 	}
 	if password == "" {
 		return nil

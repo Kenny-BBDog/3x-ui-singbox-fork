@@ -859,6 +859,7 @@ func (s *SubService) genAnyTLSLink(inbound *model.Inbound, email string) string 
 	if !ok {
 		return ""
 	}
+	// AnyTLS reads the shared client's Password field
 	password := client.Password
 	if password == "" {
 		password = client.Auth
@@ -904,9 +905,11 @@ func (s *SubService) genSingboxHysteria2Link(inbound *model.Inbound, email strin
 	if !ok {
 		return ""
 	}
-	password := client.Password
+	// Hysteria2 reads the shared client's Auth field (Hysteria family
+	// convention); fall back to Password for panel-created clients.
+	password := client.Auth
 	if password == "" {
-		password = client.Auth
+		password = client.Password
 	}
 	if password == "" {
 		return ""

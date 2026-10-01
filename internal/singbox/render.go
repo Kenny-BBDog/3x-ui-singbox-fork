@@ -78,10 +78,12 @@ func RenderConfig(inputs []RenderInput, clashSecret string) ([]byte, error) {
 
 		users := make([]SBUser, 0)
 		for _, c := range input.Clients {
-			pw := c.Password
-			if pw == "" {
-				pw = c.Auth
-			}
+			// Credential field follows the 3x-ui convention: AnyTLS is a
+			// Trojan-style password protocol (Password), Hysteria2 is the
+			// Hysteria family (Auth). One client row therefore carries a
+			// distinct credential per sing-box protocol, like a client
+			// attached to both a VLESS and a Hysteria inbound.
+			pw := singboxClientCredential(in.Protocol, c)
 			if pw == "" || !c.Enable {
 				continue
 			}
@@ -146,6 +148,24 @@ func sbType(p model.Protocol) string {
 		return "hysteria2"
 	}
 	return "anytls"
+}
+
+// singboxClientCredential returns the credential a sing-box protocol reads
+// from a shared client row. Convention (mirrors upstream's field-per-protocol
+// habits): AnyTLS → Password, Hysteria2 → Auth. Auth falls back to Password so
+// a client created through the panel's generic form (which fills Password)
+// still works on Hysteria2 without a manual edit.
+func singboxClientCredential(p model.Protocol, c model.Client) string {
+	if p == model.Hysteria2SB {
+		if c.Auth != "" {
+			return c.Auth
+		}
+		return c.Password
+	}
+	if c.Password != "" {
+		return c.Password
+	}
+	return c.Auth
 }
 
 // inboundTags returns the enabled sing-box inbound tags (stats.inbounds).
