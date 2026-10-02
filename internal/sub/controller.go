@@ -330,6 +330,13 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
+	// Geo databases for Clash/Mihomo clients. Served from the panel so a single
+	// service covers both subscriptions and geodata; path mirrors the layout
+	// clients already expect from geox-url in the generated profile.
+	gGeo := g.Group("geox/")
+	gGeo.GET(":name", a.geoAsset)
+	gGeo.HEAD(":name", a.geoAsset)
+
 	gLink := g.Group(a.subPath)
 	gLink.GET(":subid", a.subs)
 	gLink.HEAD(":subid", a.subs)
@@ -365,6 +372,41 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 
 func sameSubscriptionPath(left, right string) bool {
 	return strings.Trim(left, "/") == strings.Trim(right, "/")
+}
+
+// geoAsset serves a cached geo database (geoip.dat, geosite.dat, country.mmdb,
+// GeoLite2-ASN.mmdb) to Clash/Mihomo clients. Serving these from the panel
+// keeps one service responsible for both subscriptions and geodata, so there
+// is no separate sidecar to track. Unknown names are rejected, and a mirror
+// failure falls back to a stale cached copy rather than an error, because a
+// client that cannot fetch geodata loses all GEOIP/GEOSITE routing.
+func (a *SUBController) geoAsset(c *gin.Context) {
+	name := c.Param("name")
+	path, ok := GeoAssetPath(name)
+	if !ok {
+		c.String(http.StatusNotFound, "unknown geo asset")
+		return
+	}
+
+	if _, err := a.EnsureGeoAsset(name); err != nil {
+		logger.Warningf("geox: %s unavailable: %v", name, err)
+		c.String(http.StatusBadGateway, "geo asset unavailable")
+		return
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "geo asset stat failed")
+		return
+	}
+
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Header("Content-Length", strconv.FormatInt(info.Size(), 10))
+	if c.Request.Method == http.MethodHead {
+		c.Status(http.StatusOK)
+		return
+	}
+	c.File(path)
 }
 
 func (a *SUBController) configuredSubscriptionPathOwner(candidate string) string {

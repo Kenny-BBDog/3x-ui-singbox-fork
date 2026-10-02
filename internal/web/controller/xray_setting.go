@@ -9,6 +9,7 @@ import (
 	"time"
 
 	piaprotocol "github.com/mhsanaei/3x-ui/v3/internal/pia"
+	"github.com/mhsanaei/3x-ui/v3/internal/sub"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/integration"
@@ -62,6 +63,8 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/geodata/categories", a.geodataCategories)
 	g.GET("/geodata/entries", a.geodataEntries)
 	g.POST("/geodata/validate", a.geodataValidate)
+	// Geo databases the subscription server mirrors for Clash/Mihomo clients.
+	g.GET("/geodata/subscriptionCache", a.geodataSubscriptionCache)
 
 	// Outbound subscription (remote outbound lists)
 	g.GET("/outbound-subs", a.listOutboundSubs)
@@ -448,6 +451,12 @@ func (a *XraySettingController) geodataFiles(c *gin.Context) {
 		return
 	}
 	jsonObj(c, files, nil)
+}
+
+// geodataSubscriptionCache reports the geo databases the subscription server
+// serves to Clash/Mihomo clients, so their freshness is visible in the panel.
+func (a *XraySettingController) geodataSubscriptionCache(c *gin.Context) {
+	jsonObj(c, sub.GeoCacheStatus(), nil)
 }
 
 // geodataCategories returns one page of a database's categories.
