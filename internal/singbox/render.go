@@ -28,6 +28,12 @@ type InboundSettings struct {
 	DownMps      int    `json:"down_mps"`
 	ObfsType     string `json:"obfs_type"`
 	ObfsPassword string `json:"obfs_password"`
+	// Chained egress (residential pools): when set, the rendered sing-box config
+	// gains one socks outbound with these values plus a route rule binding this
+	// inbound's tag to that outbound. Traffic accounting stays on the inbound
+	// (v2ray-api stats by inbound tag + user email), so per-client metering is
+	// unaffected.
+	SBOutbound *SBOutbound `json:"sbOutbound,omitempty"`
 	// clients: [{email, password|auth, enable, ...}]
 	Clients []InboundClient `json:"clients"`
 }
@@ -178,6 +184,21 @@ func RenderConfig(inputs []RenderInput, clashSecret string) ([]byte, error) {
 			}
 		}
 		cfg.Inbounds = append(cfg.Inbounds, sbi)
+
+		// Chained egress: emit the declared socks outbound and the rule that
+		// pins this inbound to it. The tag "direct" outbound is always present,
+		// so rules referencing a missing outbound cannot occur.
+		if ch := s.SBOutbound; ch != nil && ch.Tag != "" {
+			ch.Version = "5"
+			cfg.Outbounds = append(cfg.Outbounds, *ch)
+			if cfg.Route == nil {
+				cfg.Route = &SBRoute{}
+			}
+			cfg.Route.Rules = append(cfg.Route.Rules, SBRouteRule{
+				Inbound:  []string{in.Tag},
+				Outbound: ch.Tag,
+			})
+		}
 	}
 
 	if len(cfg.Inbounds) == 0 {

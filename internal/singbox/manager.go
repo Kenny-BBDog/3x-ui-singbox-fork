@@ -102,6 +102,29 @@ type SBObfs struct {
 type SBOutbound struct {
 	Type string `json:"type"`
 	Tag  string `json:"tag"`
+	// socks outbound extras (residential chain): the render fills these when an
+	// inbound declares an sbOutbound in its settings JSON.
+	Server     string       `json:"server,omitempty"`
+	ServerPort int          `json:"server_port,omitempty"`
+	Version    string       `json:"version,omitempty"`
+	Users      []SBSocksUID `json:"users,omitempty"`
+}
+
+// SBSocksUID is the sing-box socks outbound user shape (username/password).
+type SBSocksUID struct {
+	User     string `json:"username"`
+	Password string `json:"password,omitempty"`
+}
+
+// SBRouteRule mirrors the sing-box route rule subset the fork needs:
+// inbound-based detour to a named outbound.
+type SBRouteRule struct {
+	Inbound     []string `json:"inbound,omitempty"`
+	Outbound    string   `json:"outbound,omitempty"`
+}
+
+type SBRoute struct {
+	Rules []SBRouteRule `json:"rules,omitempty"`
 }
 
 type SBLog struct {
@@ -131,10 +154,11 @@ type SBExperimental struct {
 }
 
 type SBConfig struct {
-	Log         *SBLog         `json:"log,omitempty"`
+	Log          *SBLog          `json:"log,omitempty"`
 	Experimental *SBExperimental `json:"experimental,omitempty"`
-	Inbounds    []SBInbound    `json:"inbounds"`
-	Outbounds   []SBOutbound   `json:"outbounds"`
+	Inbounds     []SBInbound     `json:"inbounds"`
+	Outbounds    []SBOutbound    `json:"outbounds"`
+	Route        *SBRoute        `json:"route,omitempty"`
 }
 
 // ---------------------------------------------------------------- process
