@@ -188,9 +188,17 @@ func RenderConfig(inputs []RenderInput, clashSecret string) ([]byte, error) {
 		// Chained egress: emit the declared socks outbound and the rule that
 		// pins this inbound to it. The tag "direct" outbound is always present,
 		// so rules referencing a missing outbound cannot occur.
+		// sing-box 1.x socks outbound models credentials as top-level
+		// username/password, so the declared users[0] is lifted to those fields
+		// via SBSocksEgress.
 		if ch := s.SBOutbound; ch != nil && ch.Tag != "" {
-			ch.Version = "5"
-			cfg.Outbounds = append(cfg.Outbounds, *ch)
+			v := *ch
+			v.Version = "5"
+			v.Username = v.EgressUser
+			v.Password = v.EgressPassword
+			v.EgressUser = ""
+			v.EgressPassword = ""
+			cfg.Outbounds = append(cfg.Outbounds, v)
 			if cfg.Route == nil {
 				cfg.Route = &SBRoute{}
 			}

@@ -103,17 +103,16 @@ type SBOutbound struct {
 	Type string `json:"type"`
 	Tag  string `json:"tag"`
 	// socks outbound extras (residential chain): the render fills these when an
-	// inbound declares an sbOutbound in its settings JSON.
-	Server     string       `json:"server,omitempty"`
-	ServerPort int          `json:"server_port,omitempty"`
-	Version    string       `json:"version,omitempty"`
-	Users      []SBSocksUID `json:"users,omitempty"`
-}
-
-// SBSocksUID is the sing-box socks outbound user shape (username/password).
-type SBSocksUID struct {
-	User     string `json:"username"`
-	Password string `json:"password,omitempty"`
+	// inbound declares an sbOutbound in its settings JSON. sing-box 1.x models a
+	// proxy user as top-level username/password (no users array) — the panel-side
+	// declaration uses EgressUser/EgressPassword and the render lifts them.
+	Server        string `json:"server,omitempty"`
+	ServerPort    int    `json:"server_port,omitempty"`
+	Version       string `json:"version,omitempty"`
+	Username      string `json:"username,omitempty"`
+	Password      string `json:"password,omitempty"`
+	EgressUser    string `json:"egressUser,omitempty"`
+	EgressPassword string `json:"egressPassword,omitempty"`
 }
 
 // SBRouteRule mirrors the sing-box route rule subset the fork needs:
