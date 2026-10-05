@@ -1789,7 +1789,35 @@ export const sections: readonly Section[] = [
   },
 
   {
+    id: 'singbox',
+    title: 'sing-box',
+    description:
+      'Control endpoints for the sing-box core, which this fork runs alongside Xray for the anytls and hysteria2sb inbounds. Inbound and client CRUD for those protocols uses the regular inbounds/clients endpoints — sing-box inbounds are ordinary rows in the shared tables, so quotas, expiry, traffic and subscriptions behave identically. This group only exposes process status and control.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/singbox/status',
+        summary:
+          'Current sing-box process state: whether it is running, its version, the resolved binary path, and the last start error if any.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/singbox/previewConfig',
+        summary:
+          'The sing-box configuration the panel currently renders from the database, as a JSON string. Useful for confirming what the core would load before a restart.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/singbox/restart',
+        summary:
+          'Restart the sing-box process. Existing client connections through sing-box inbounds drop and reconnect.',
+      },
+    ],
+  },
+
+  {
     id: 'hosts',
+
     title: 'Hosts',
     description:
       'Per-inbound override endpoints. Each enabled host renders one extra subscription link/proxy with its own address/port/TLS, superseding the legacy externalProxy array. All endpoints under /panel/api/hosts.',

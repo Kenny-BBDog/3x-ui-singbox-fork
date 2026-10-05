@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -91,8 +92,9 @@ func GeoAssetPath(name string) (string, bool) {
 // EnsureGeoAsset returns a usable local path for the asset, downloading (or
 // refreshing) it when missing or older than ttl. A cached file is preferred
 // over a failed download, so a temporarily unreachable upstream never breaks
-// clients that already have the asset.
-func (a *SUBController) EnsureGeoAsset(name string) (string, error) {
+// clients that already have the asset. ctx bounds the download, so a slow
+// mirror cannot hold the request open past its own deadline.
+func (a *SUBController) EnsureGeoAsset(ctx context.Context, name string) (string, error) {
 	target, ok := GeoAssetPath(name)
 	if !ok {
 		return "", fmt.Errorf("unknown geo asset: %q", name)
@@ -115,7 +117,7 @@ func (a *SUBController) EnsureGeoAsset(name string) (string, error) {
 	client := a.settingService.NewProxiedHTTPClient(120 * time.Second)
 	var lastErr error
 	for _, url := range geoUpstreams[name] {
-		if err := downloadGeoAsset(client, url, target); err != nil {
+		if err := downloadGeoAsset(ctx, client, url, target); err != nil {
 			lastErr = err
 			logger.Warningf("geox: mirror %s failed for %s: %v", url, name, err)
 			continue
@@ -135,8 +137,12 @@ func (a *SUBController) EnsureGeoAsset(name string) (string, error) {
 // downloadGeoAsset fetches url into dest atomically. A response that is not a
 // 200, or is shorter than a plausible geo database, is rejected so a captive
 // portal or error page never lands in the cache.
-func downloadGeoAsset(client *http.Client, url, dest string) error {
-	resp, err := client.Get(url)
+func downloadGeoAsset(ctx context.Context, client *http.Client, url, dest string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

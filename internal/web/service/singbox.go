@@ -155,9 +155,10 @@ var (
 
 func sbStatsDial() (*grpc.ClientConn, error) {
 	sbStatsConnOnce.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		sbStatsConn, sbStatsConnErr = grpc.DialContext(ctx, singbox.V2RayAPIAddr,
+		// grpc.NewClient connects lazily; the first RPC carries the deadline
+		// (sbStatsDial's callers all pass a bounded ctx), so no dial-time ctx
+		// is needed here.
+		sbStatsConn, sbStatsConnErr = grpc.NewClient(singbox.V2RayAPIAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 	})
 	return sbStatsConn, sbStatsConnErr
@@ -192,12 +193,10 @@ func (s *SingboxService) PollTraffic() error {
 		inboundId int
 	}
 	users := make(map[string]meter)
-	var tags []string
 	for _, in := range inbounds {
 		if !in.Protocol.IsSingbox() || in.NodeID != nil {
 			continue
 		}
-		tags = append(tags, in.Tag)
 		for _, st := range in.ClientStats {
 			if st.Email != "" {
 				users[st.Email] = meter{inboundId: in.Id}

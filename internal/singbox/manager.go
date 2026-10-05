@@ -199,7 +199,6 @@ func (w *procLogWriter) Write(p []byte) (int, error) {
 }
 
 type Process struct {
-	mu         sync.Mutex
 	cmd        *exec.Cmd
 	configPath string
 	exitCh     chan struct{}
