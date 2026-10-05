@@ -1,6 +1,6 @@
 # 0001 — Release deploy pipeline and health gate
 
-Status: Approved
+Status: Implementing
 Owner: Kenny-BBDog
 Created: 2026-10-05
 Supersedes: none
