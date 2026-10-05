@@ -162,6 +162,10 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/server/clientIps":            {http.MethodGet: {}, http.MethodPost: {}},
 		"/clients/clientIpsByGuid":     {http.MethodPost: {}},
 		"/hosts/list":                  {http.MethodGet: {}},
+		// The panel runs sing-box as a second runtime; node tokens may read its
+		// status and restart it across the master panel, same as they may for xray.
+		"/singbox/status":  {http.MethodGet: {}},
+		"/singbox/restart": {http.MethodPost: {}},
 	}
 	if !reflect.DeepEqual(nodeSyncScopeAllow, expected) {
 		t.Fatalf("node-sync allowlist drift:\n got: %#v\nwant: %#v", nodeSyncScopeAllow, expected)

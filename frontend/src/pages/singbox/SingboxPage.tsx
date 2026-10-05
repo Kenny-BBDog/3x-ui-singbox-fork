@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -8,7 +7,6 @@ import {
   ConfigProvider,
   Descriptions,
   Layout,
-  Modal,
   Popconfirm,
   Row,
   Statistic,
@@ -32,7 +30,6 @@ interface SingboxStatus {
 // Inbound/client CRUD for anytls / hysteria2sb uses the regular inbounds
 // and clients pages — they are first-class rows in the shared tables.
 export default function SingboxPage() {
-  const { t } = useTranslation();
   const { antdThemeConfig } = useTheme();
   const { isMobile } = useMediaQuery();
   const queryClient = useQueryClient();
@@ -46,7 +43,9 @@ export default function SingboxPage() {
       const res = await HttpUtil.get<SingboxStatus>('/panel/api/singbox/status', undefined, {
         silent: true,
       });
-      return (res.obj as SingboxStatus) || { running: false, version: '', lastError: '', binary: '' };
+      return (
+        (res.obj as SingboxStatus) || { running: false, version: '', lastError: '', binary: '' }
+      );
     },
     refetchInterval: 5000,
   });
@@ -54,9 +53,13 @@ export default function SingboxPage() {
   const preview = useQuery<string>({
     queryKey: ['singbox-preview'],
     queryFn: async () => {
-      const res = await HttpUtil.get<{ config: string }>('/panel/api/singbox/previewConfig', undefined, {
-        silent: true,
-      });
+      const res = await HttpUtil.get<{ config: string }>(
+        '/panel/api/singbox/previewConfig',
+        undefined,
+        {
+          silent: true,
+        },
+      );
       return (res.obj as { config: string })?.config || '{}';
     },
   });
@@ -90,9 +93,7 @@ export default function SingboxPage() {
                     prefix={<ThunderboltOutlined />}
                   />
                   <Descriptions column={1} size="small" style={{ marginTop: 12 }}>
-                    <Descriptions.Item label="Version">
-                      {st?.version || '—'}
-                    </Descriptions.Item>
+                    <Descriptions.Item label="Version">{st?.version || '—'}</Descriptions.Item>
                     <Descriptions.Item label="Binary">
                       <span style={{ fontSize: 12 }}>{st?.binary}</span>
                     </Descriptions.Item>
@@ -125,10 +126,10 @@ export default function SingboxPage() {
               <Col xs={24} md={8}>
                 <Card title="How it works">
                   <div style={{ fontSize: 13, opacity: 0.75, lineHeight: 1.6 }}>
-                    AnyTLS / Hysteria2 inbounds are created on the Inbounds page like any
-                    other protocol. Clients, quotas, expiry, traffic and subscriptions work
-                    identically because sing-box inbounds share the same tables as Xray.
-                    This page controls the sing-box process itself.
+                    AnyTLS / Hysteria2 inbounds are created on the Inbounds page like any other
+                    protocol. Clients, quotas, expiry, traffic and subscriptions work identically
+                    because sing-box inbounds share the same tables as Xray. This page controls the
+                    sing-box process itself.
                   </div>
                 </Card>
               </Col>

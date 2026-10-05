@@ -136,9 +136,9 @@ func (s *SingboxService) Restart() error {
 // the process lifetime; a process restart resets them, so the baselines are
 // cleared whenever a fresh process is detected (first poll after restart).
 type sbTrafficState struct {
-	mu        sync.Mutex
-	lastUp    map[string]int64
-	lastDown  map[string]int64
+	mu       sync.Mutex
+	lastUp   map[string]int64
+	lastDown map[string]int64
 }
 
 var sbTraffic = sbTrafficState{
