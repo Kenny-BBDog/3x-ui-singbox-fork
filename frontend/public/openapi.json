@@ -3115,7 +3115,9 @@
               "tun",
               "mtproto",
               "amneziawg",
-              "tuic"
+              "tuic",
+              "anytls",
+              "hysteria2sb"
             ],
             "example": "vless",
             "type": "string"
@@ -4839,6 +4841,10 @@
     {
       "name": "Nodes",
       "description": "Manage remote 3x-ui panels acting as nodes for a central panel. All endpoints under /panel/api/nodes."
+    },
+    {
+      "name": "sing-box",
+      "description": "Control endpoints for the sing-box core, which this fork runs alongside Xray for the anytls and hysteria2sb inbounds. Inbound and client CRUD for those protocols uses the regular inbounds/clients endpoints — sing-box inbounds are ordinary rows in the shared tables, so quotas, expiry, traffic and subscriptions behave identically. This group only exposes process status and control."
     },
     {
       "name": "Hosts",
@@ -11837,6 +11843,96 @@
         }
       }
     },
+    "/panel/api/singbox/status": {
+      "get": {
+        "tags": [
+          "sing-box"
+        ],
+        "summary": "Current sing-box process state: whether it is running, its version, the resolved binary path, and the last start error if any.",
+        "operationId": "get_panel_api_singbox_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/singbox/previewConfig": {
+      "get": {
+        "tags": [
+          "sing-box"
+        ],
+        "summary": "The sing-box configuration the panel currently renders from the database, as a JSON string. Useful for confirming what the core would load before a restart.",
+        "operationId": "get_panel_api_singbox_previewConfig",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/singbox/restart": {
+      "post": {
+        "tags": [
+          "sing-box"
+        ],
+        "summary": "Restart the sing-box process. Existing client connections through sing-box inbounds drop and reconnect.",
+        "operationId": "post_panel_api_singbox_restart",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/hosts/list": {
       "get": {
         "tags": [
@@ -14223,6 +14319,36 @@
         ],
         "summary": "List the geo databases (.dat files) in the Xray asset folder, with the layout detected from their contents, size, modification time and category count. A database that fails to parse is still listed, with the reason in \"error\".",
         "operationId": "get_panel_api_xray_geodata_files",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/geodata/subscriptionCache": {
+      "get": {
+        "tags": [
+          "Xray Settings"
+        ],
+        "summary": "Freshness of the geo databases the subscription server serves to Clash/Mihomo clients: each cached asset with its size, age and source, so a stale cache is visible before clients route on outdated rules.",
+        "operationId": "get_panel_api_xray_geodata_subscriptionCache",
         "responses": {
           "200": {
             "description": "Successful response",

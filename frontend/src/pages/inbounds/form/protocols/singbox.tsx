@@ -18,21 +18,21 @@ export default function SingboxFields({ kind }: { kind: 'anytls' | 'hysteria2sb'
       <FormField
         name="settings.server_name"
         label={t('pages.inbounds.security.tls.serverName', 'TLS server name (SNI)')}
-        rules={[{ required: true }]}
+        required
       >
         <Input placeholder="e.g. vpn.example.com" />
       </FormField>
       <FormField
         name="settings.certificate_path"
         label={t('pages.inbounds.security.tls.certPath', 'Certificate path (fullchain)')}
-        rules={[{ required: true }]}
+        required
       >
         <Input placeholder="/etc/letsencrypt/live/example.com/fullchain.pem" />
       </FormField>
       <FormField
         name="settings.key_path"
         label={t('pages.inbounds.security.tls.keyPath', 'Key path (private key)')}
-        rules={[{ required: true }]}
+        required
       >
         <Input placeholder="/etc/letsencrypt/live/example.com/privkey.pem" />
       </FormField>

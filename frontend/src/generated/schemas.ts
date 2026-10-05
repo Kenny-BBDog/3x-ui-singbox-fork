@@ -3089,7 +3089,9 @@ export const SCHEMAS: Record<string, unknown> = {
           "tun",
           "mtproto",
           "amneziawg",
-          "tuic"
+          "tuic",
+          "anytls",
+          "hysteria2sb"
         ],
         "example": "vless",
         "type": "string"

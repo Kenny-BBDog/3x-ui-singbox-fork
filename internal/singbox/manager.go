@@ -10,6 +10,7 @@
 package singbox
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,7 +58,9 @@ func Version() (string, error) {
 	if _, err := os.Stat(bin); err != nil {
 		return "", fmt.Errorf("sing-box binary not found at %s", bin)
 	}
-	out, err := exec.Command(bin, "version").CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), versionTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, "version").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("sing-box version failed: %w", err)
 	}
@@ -88,10 +91,10 @@ type SBInbound struct {
 	Users      []SBUser `json:"users,omitempty"`
 	TLS        *SBTLS   `json:"tls,omitempty"`
 	// hysteria2 extras
-	UpMps   *int   `json:"up_mps,omitempty"`
-	DownMps *int   `json:"down_mps,omitempty"`
-	Obfs    *SBObfs `json:"obfs,omitempty"`
-	IgnoreClientBandwidth bool `json:"ignore_client_bandwidth,omitempty"`
+	UpMps                 *int    `json:"up_mps,omitempty"`
+	DownMps               *int    `json:"down_mps,omitempty"`
+	Obfs                  *SBObfs `json:"obfs,omitempty"`
+	IgnoreClientBandwidth bool    `json:"ignore_client_bandwidth,omitempty"`
 }
 
 type SBObfs struct {
@@ -106,20 +109,20 @@ type SBOutbound struct {
 	// inbound declares an sbOutbound in its settings JSON. sing-box 1.x models a
 	// proxy user as top-level username/password (no users array) — the panel-side
 	// declaration uses EgressUser/EgressPassword and the render lifts them.
-	Server        string `json:"server,omitempty"`
-	ServerPort    int    `json:"server_port,omitempty"`
-	Version       string `json:"version,omitempty"`
-	Username      string `json:"username,omitempty"`
-	Password      string `json:"password,omitempty"`
-	EgressUser    string `json:"egressUser,omitempty"`
+	Server         string `json:"server,omitempty"`
+	ServerPort     int    `json:"server_port,omitempty"`
+	Version        string `json:"version,omitempty"`
+	Username       string `json:"username,omitempty"`
+	Password       string `json:"password,omitempty"`
+	EgressUser     string `json:"egressUser,omitempty"`
 	EgressPassword string `json:"egressPassword,omitempty"`
 }
 
 // SBRouteRule mirrors the sing-box route rule subset the fork needs:
 // inbound-based detour to a named outbound.
 type SBRouteRule struct {
-	Inbound     []string `json:"inbound,omitempty"`
-	Outbound    string   `json:"outbound,omitempty"`
+	Inbound  []string `json:"inbound,omitempty"`
+	Outbound string   `json:"outbound,omitempty"`
 }
 
 type SBRoute struct {
@@ -137,8 +140,8 @@ type SBClashAPI struct {
 }
 
 type SBV2RayAPI struct {
-	Listen string          `json:"listen"`
-	Stats  *SBV2RayStats   `json:"stats"`
+	Listen string        `json:"listen"`
+	Stats  *SBV2RayStats `json:"stats"`
 }
 
 type SBV2RayStats struct {
@@ -165,6 +168,11 @@ type SBConfig struct {
 var (
 	stopTimeoutGraceful = 5 * time.Second
 	stopTimeoutForce    = 2 * time.Second
+	// versionTimeout bounds the `sing-box version` probe so a wedged binary
+	// cannot hang a caller that only wants a version string.
+	versionTimeout = 10 * time.Second
+	// checkTimeout bounds the config-validation probe the same way.
+	checkTimeout = 15 * time.Second
 )
 
 type procLogWriter struct {
@@ -191,7 +199,6 @@ func (w *procLogWriter) Write(p []byte) (int, error) {
 }
 
 type Process struct {
-	mu         sync.Mutex
 	cmd        *exec.Cmd
 	configPath string
 	exitCh     chan struct{}
@@ -221,7 +228,7 @@ func (p *Process) start() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(binAbs, "run", "-D", filepath.Dir(cfgAbs), "-c", cfgAbs)
+	cmd := exec.CommandContext(context.Background(), binAbs, "run", "-D", filepath.Dir(cfgAbs), "-c", cfgAbs)
 	cmd.Stdout = &procLogWriter{}
 	cmd.Stderr = &procLogWriter{}
 	if err := cmd.Start(); err != nil {
@@ -431,7 +438,9 @@ func checkConfigBytes(data []byte) error {
 		return err
 	}
 	defer os.Remove(tmp)
-	out, err := exec.Command(bin, "check", "-c", tmp).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), checkTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, "check", "-c", tmp).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sing-box check failed: %s", strings.TrimSpace(string(out)))
 	}

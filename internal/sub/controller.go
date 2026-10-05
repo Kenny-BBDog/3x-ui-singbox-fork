@@ -388,7 +388,7 @@ func (a *SUBController) geoAsset(c *gin.Context) {
 		return
 	}
 
-	if _, err := a.EnsureGeoAsset(name); err != nil {
+	if _, err := a.EnsureGeoAsset(c.Request.Context(), name); err != nil {
 		logger.Warningf("geox: %s unavailable: %v", name, err)
 		c.String(http.StatusBadGateway, "geo asset unavailable")
 		return
