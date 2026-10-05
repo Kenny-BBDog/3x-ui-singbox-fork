@@ -1,5 +1,5 @@
 import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -81,20 +81,25 @@ if (!i18next.isInitialized) {
 }
 
 afterEach(async () => {
+  /*
+   * Flush React's pending work inside `act` BEFORE unmounting.
+   *
+   * React 19 defers passive-effect flushes onto a macrotask whose callback
+   * reads `window.event`. Cleanup unmounts and then the jsdom environment is
+   * torn down; if a flush is still queued at that point it runs with `window`
+   * gone and throws "window is not defined". That does not fail an assertion,
+   * but vitest counts it as an unhandled error and the run exits non-zero —
+   * which is how this failed intermittently on CI while passing locally
+   * (CodeMirror and AntD queue follow-up layout work that makes the queue depth
+   * depend on the test).
+   *
+   * `act` returns only once React's queued work has been processed, so a single
+   * awaited `act` on an empty callback is the reliable form of the old
+   * fixed-tick drain: it waits for the real queue instead of guessing a depth.
+   */
+  await act(async () => {});
   cleanup();
   document.body.innerHTML = '';
-  /*
-   * React 19 defers passive-effect flushes onto a macrotask (setImmediate),
-   * whose callback reads `window.event`. If one is still queued when vitest
-   * tears down the jsdom environment, it fires after `window` is gone and
-   * throws "window is not defined". Drain a few macrotask ticks here so any
-   * pending callback runs while `window` still exists. Several ticks are used
-   * because a microtask resolving mid-drain (rc-trigger/AntD) can queue a new
-   * one behind the first.
-   */
-  for (let i = 0; i < 3; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
 });
 
 import { HttpUtil, Msg } from '@/utils';
