@@ -160,7 +160,7 @@ health_gate() {
   local host="$1" base extra
   base="$(base_url "$host")"
   extra="$(curl_extra "$host")"
-  local fail=0 missing=0 n=0
+  local fail=0
 
   if run_on "$host" "systemctl is-active $SERVICE" | grep -qx active; then
     ok "check 1: $SERVICE active"
