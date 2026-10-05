@@ -1,6 +1,6 @@
 # 0002 — Per-inbound traffic multiplier (residential 2×)
 
-Status: Approved
+Status: Implementing
 Owner: Kenny-BBDog
 Created: 2026-10-05
 Supersedes: none
