@@ -113,6 +113,47 @@ func migrateInboundExcludeFromSubColumn() error {
 	return migrator.AddColumn(&model.Inbound{}, "ExcludeFromSub")
 }
 
+// migrateClientTrafficRawColumns adds the unweighted byte columns and backfills
+// them from the weighted ones. Existing rows were accumulated while every
+// inbound was 1x, so up/down were the true byte counts at the time: copying them
+// is the honest backfill, not a guess.
+//
+// The backfill runs only on the transition (when the column was just added), so a
+// later deploy does not overwrite raw values that have since diverged.
+func migrateClientTrafficRawColumns() error {
+	migrator := db.Migrator()
+	if !migrator.HasTable(&xray.ClientTraffic{}) {
+		return nil
+	}
+	addedRawUp := false
+	if !migrator.HasColumn(&xray.ClientTraffic{}, "raw_up") {
+		if err := migrator.AddColumn(&xray.ClientTraffic{}, "RawUp"); err != nil {
+			return err
+		}
+		addedRawUp = true
+	}
+	if !migrator.HasColumn(&xray.ClientTraffic{}, "raw_down") {
+		if err := migrator.AddColumn(&xray.ClientTraffic{}, "RawDown"); err != nil {
+			return err
+		}
+	}
+	if !addedRawUp {
+		return nil
+	}
+	return db.Exec("UPDATE client_traffics SET raw_up = up, raw_down = down").Error
+}
+
+// migrateInboundTrafficMultiplierColumn adds the per-inbound weight. The default
+// of 1 means every existing inbound keeps charging 1:1, so nothing changes until
+// an inbound is deliberately set above 1.
+func migrateInboundTrafficMultiplierColumn() error {
+	migrator := db.Migrator()
+	if !migrator.HasTable(&model.Inbound{}) || migrator.HasColumn(&model.Inbound{}, "traffic_multiplier") {
+		return nil
+	}
+	return migrator.AddColumn(&model.Inbound{}, "TrafficMultiplier")
+}
+
 func initModels() error {
 	if err := migrateClientTrafficLastSubFetchColumn(); err != nil {
 		return err
@@ -121,6 +162,12 @@ func initModels() error {
 		return err
 	}
 	if err := migrateInboundExcludeFromSubColumn(); err != nil {
+		return err
+	}
+	if err := migrateClientTrafficRawColumns(); err != nil {
+		return err
+	}
+	if err := migrateInboundTrafficMultiplierColumn(); err != nil {
 		return err
 	}
 	models := allModels()

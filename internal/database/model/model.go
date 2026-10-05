@@ -87,6 +87,14 @@ type Inbound struct {
 
 	DisableFlow bool `json:"disableFlow" form:"disableFlow" gorm:"column:disable_flow;default:false" example:"false"`
 
+	// TrafficMultiplier weights every byte metered on this inbound when it is
+	// charged against a client's quota, so a more expensive route (residential,
+	// CN2GIA) can consume a quota faster than a cheap high-volume line. 1 means
+	// 1:1. Integer only: a fractional weight would make every byte inexact for no
+	// product need. Only meaningful for a local inbound — a mirror row carries the
+	// value so the UI can show it, and the node that meters the traffic applies it.
+	TrafficMultiplier int `json:"trafficMultiplier" form:"trafficMultiplier" gorm:"column:traffic_multiplier;default:1" validate:"omitempty,gte=1,lte=1000" example:"1"`
+
 	// OriginNodeGuid is the panelGuid of the node that physically hosts this
 	// inbound, propagated up across hops (#4983). Empty for an inbound that
 	// lives on this panel's own xray; set to the originating node's GUID when
