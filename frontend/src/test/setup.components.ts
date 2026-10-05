@@ -70,6 +70,21 @@ if (!Range.prototype.getClientRects) {
   Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 }
 
+// This jsdom environment has no `setImmediate`, so React's scheduler falls back
+// to a MessageChannel port callback to dispatch its work. That is a macrotask no
+// `setTimeout` can flush, and if it is still queued at teardown it runs with
+// `window` gone and throws "window is not defined" — an unhandled error that
+// fails the run even though every assertion passed.
+//
+// Supplying `setImmediate` puts the scheduler back on a channel a drain (and
+// `act`) can reach. Defined before React is imported, because the scheduler
+// chooses its channel once, at load.
+if (typeof (globalThis as { setImmediate?: unknown }).setImmediate === 'undefined') {
+  (globalThis as unknown as { setImmediate: (cb: () => void) => unknown }).setImmediate = (
+    cb: () => void,
+  ) => setTimeout(cb, 0);
+}
+
 if (!i18next.isInitialized) {
   void i18next.use(initReactI18next).init({
     lng: 'en-US',
@@ -82,20 +97,27 @@ if (!i18next.isInitialized) {
 
 afterEach(async () => {
   /*
-   * Flush React's pending work inside `act` BEFORE unmounting.
+   * Flush React's pending work BEFORE unmounting, then unmount.
    *
-   * React 19 defers passive-effect flushes onto a macrotask whose callback
-   * reads `window.event`. Cleanup unmounts and then the jsdom environment is
-   * torn down; if a flush is still queued at that point it runs with `window`
-   * gone and throws "window is not defined". That does not fail an assertion,
-   * but vitest counts it as an unhandled error and the run exits non-zero —
-   * which is how this failed intermittently on CI while passing locally
-   * (CodeMirror and AntD queue follow-up layout work that makes the queue depth
-   * depend on the test).
+   * React 19 dispatches its work from a scheduler task whose callback reads
+   * `window.event`. If work is still queued when vitest tears the jsdom
+   * environment down, that callback runs with `window` gone and throws
+   * "window is not defined". No assertion fails, but vitest counts it as an
+   * unhandled error and the whole run exits non-zero — which is how this failed
+   * repeatedly on CI while passing locally (CodeMirror and AntD schedule
+   * follow-up layout work, so the queue depth depends on the test).
    *
-   * `act` returns only once React's queued work has been processed, so a single
-   * awaited `act` on an empty callback is the reliable form of the old
-   * fixed-tick drain: it waits for the real queue instead of guessing a depth.
+   * Why a plain timeout drain was not enough: React's scheduler picks its
+   * dispatch channel at load time. It prefers `setImmediate`, and falls back to
+   * a `MessageChannel` port callback when `setImmediate` is absent — which is
+   * the case in this jsdom environment. A MessageChannel callback is a
+   * macrotask that `setTimeout` never flushes, so draining timers (the previous
+   * fixed three-tick loop, and an `act` flush) could still leave work pending.
+   * Measured: deleting `setImmediate` in this environment turns a clean run into
+   * 155 unhandled errors, which is the same class of failure.
+   *
+   * `setImmediateShim` above makes the scheduler use a channel a drain can
+   * reach, and `act` then waits for React's real queue instead of guessing.
    */
   await act(async () => {});
   cleanup();
