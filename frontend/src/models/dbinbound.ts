@@ -45,6 +45,8 @@ export type DBInboundInit = Partial<{
   shareAddr: string;
   subSortIndex: number;
   excludeFromSub: boolean;
+  /** How fast this inbound consumes a quota: 2 means every byte counts twice. */
+  trafficMultiplier: number;
   disableFlow: boolean;
   originNodeGuid: string;
   fallbackParent: FallbackParentRef | null;
@@ -95,6 +97,8 @@ export class DBInbound {
   shareAddr: string;
   subSortIndex: number;
   excludeFromSub: boolean;
+  /** How fast this inbound consumes a quota: 2 means every byte counts twice. */
+  trafficMultiplier: number;
   disableFlow: boolean;
   originNodeGuid: string;
   fallbackParent: FallbackParentRef | null;
@@ -127,6 +131,7 @@ export class DBInbound {
     this.shareAddr = '';
     this.subSortIndex = 1;
     this.excludeFromSub = false;
+    this.trafficMultiplier = 1;
     this.disableFlow = false;
     this.originNodeGuid = '';
     this.fallbackParent = null;
