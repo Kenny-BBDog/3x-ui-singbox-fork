@@ -494,6 +494,7 @@ export function useInboundColumns({
     t,
     hasAnyRemark,
     hasAnySubSortIndex,
+    hasAnyTrafficMultiplier,
     hasActiveNode,
     nodesById,
     hostRemarksByInboundId,
