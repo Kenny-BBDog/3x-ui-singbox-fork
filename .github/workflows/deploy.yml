@@ -1,0 +1,164 @@
+name: Deploy Script
+
+# deploy/deploy.sh is the only code in this repository that touches production
+# hosts, and the general CI workflow ignores it: ci.yml filters on Go and
+# frontend paths, so a change to the deploy script would otherwise merge with no
+# check at all. This workflow closes that gap.
+
+on:
+  pull_request:
+    paths:
+      - "deploy/**"
+      - "specs/**"
+      - ".github/workflows/deploy.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "deploy/**"
+      - "specs/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: Shellcheck deploy script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Syntax check
+        run: bash -n deploy/deploy.sh
+
+      - name: Shellcheck
+        run: |
+          # Fail on warnings and above. The script uses `set -Eeuo pipefail`, so
+          # quoting and unset-variable slips are exactly the class of bug this
+          # needs to catch before it runs against a production host.
+          shellcheck --version
+          shellcheck --severity=warning deploy/deploy.sh
+
+      - name: Script is executable
+        run: |
+          test -x deploy/deploy.sh || {
+            echo "deploy/deploy.sh is not marked executable. Run:" >&2
+            echo "  git update-index --chmod=+x deploy/deploy.sh" >&2
+            exit 1
+          }
+
+  dry-run-argparse:
+    name: Argument parsing and safe defaults
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Reject unknown arguments
+        run: |
+          if ./deploy/deploy.sh --definitely-not-a-real-flag >/dev/null 2>&1; then
+            echo "unknown argument was accepted; argparse is broken" >&2
+            exit 1
+          fi
+
+      - name: Reject an invalid --hosts value
+        run: |
+          if ./deploy/deploy.sh --hosts mars >/dev/null 2>&1; then
+            echo "invalid --hosts value was accepted" >&2
+            exit 1
+          fi
+
+      - name: --help exits 0
+        run: ./deploy/deploy.sh --help >/dev/null
+
+      - name: Missing SSH key fails before any host contact
+        run: |
+          # A bogus key must abort during argument validation, not after
+          # downloading or uploading anything. Assert on the message so the
+          # ordering is what is tested, not just a non-zero exit.
+          out="$(./deploy/deploy.sh --key /nonexistent/key --health-only 2>&1 || true)"
+          case "$out" in
+            *"SSH key not found"*) echo "reported correctly" ;;
+            *) echo "expected an 'SSH key not found' error, got:" >&2; echo "$out" >&2; exit 1 ;;
+          esac
+
+      - name: Download happens before any host is touched
+        run: |
+          # The release is resolved and its checksum verified BEFORE the first
+          # ssh call, so a bad artifact can never leave this machine. Assert the
+          # ordering by observing which stage the run reaches with no key: the
+          # tool check and the key check must fire before anything network-shaped
+          # against a host.
+          out="$(./deploy/deploy.sh --key /nonexistent/key 2>&1 || true)"
+          case "$out" in
+            *"Downloading"*|*"Resolving release"*)
+              echo "unexpectedly reached the download stage without a key" >&2
+              echo "$out" >&2
+              exit 1 ;;
+            *"SSH key not found"*) echo "aborted at validation, as intended" ;;
+            *) echo "unexpected output:" >&2; echo "$out" >&2; exit 1 ;;
+          esac
+
+      - name: Required tools are declared
+        run: |
+          # The script must state the tools it needs, and must include the ones
+          # whose absence would otherwise be a silent wrong answer rather than an
+          # error (sha256sum: a skipped checksum; tar: a partial extract).
+          for t in ssh scp tar curl sha256sum; do
+            grep -qE "^for tool in .*\b$t\b" deploy/deploy.sh || {
+              echo "deploy.sh does not declare a dependency on $t" >&2
+              exit 1
+            }
+          done
+
+      - name: Destructive operations are guarded
+        run: |
+          # These are the checks that keep a deploy from being unrecoverable.
+          # Each must be present; a refactor that drops one should fail here.
+          fail=0
+          require() {
+            if ! grep -qF "$1" deploy/deploy.sh; then
+              echo "deploy.sh no longer contains: $1" >&2
+              fail=1
+            fi
+          }
+          require 'checksum mismatch: release says'   # abort on bad download
+          require 'refusing to deploy'                # abort on bad staging
+          require 'cp -a $REMOTE_BIN $backup'         # keep a rollback copy
+          require 'health_gate "$host"'               # verify after restart
+          require 'rolling back'                       # automatic rollback
+          require 'rollback did not restore health'   # loud failure if rollback fails
+          exit $fail
+
+  specs:
+    name: Spec index is consistent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Every spec file is listed in the index
+        run: |
+          # A spec that is not in the index is effectively invisible, which
+          # defeats the point of writing one.
+          missing=0
+          for f in specs/[0-9][0-9][0-9][0-9]-*.md; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f")"
+            if ! grep -qF "$base" specs/README.md; then
+              echo "specs/README.md does not link $base" >&2
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Every spec carries a Status line
+        run: |
+          bad=0
+          for f in specs/[0-9][0-9][0-9][0-9]-*.md; do
+            [ -e "$f" ] || continue
+            if ! grep -qE '^Status: (Draft|Approved|Implementing|Shipped|Superseded by [0-9]{4}|Rejected)$' "$f"; then
+              echo "$f has no valid 'Status:' line" >&2
+              bad=1
+            fi
+          done
+          exit $bad
