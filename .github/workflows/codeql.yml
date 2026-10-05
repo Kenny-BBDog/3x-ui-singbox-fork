@@ -2,8 +2,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
+    # See ci.yml: this fork's production branch is master, not upstream's main.
     branches:
-      - main
+      - master
     tags-ignore:
       - "v*"
     paths:

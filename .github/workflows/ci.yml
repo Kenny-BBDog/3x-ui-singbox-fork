@@ -11,8 +11,11 @@ on:
       - "Makefile"
       - ".github/workflows/ci.yml"
   push:
+    # The fork's production branch is master, not the upstream's main; a
+    # `main` trigger made this workflow dead here (branch protection is also
+    # unavailable on a Free private repo, so CI on push is the backstop).
     branches:
-      - main
+      - master
     paths:
       - "**.go"
       - "go.mod"
