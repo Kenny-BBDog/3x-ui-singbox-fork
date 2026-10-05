@@ -2439,6 +2439,12 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/xray/geodata/subscriptionCache',
+        summary:
+          'Freshness of the geo databases the subscription server serves to Clash/Mihomo clients: each cached asset with its size, age and source, so a stale cache is visible before clients route on outdated rules.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/xray/geodata/categories',
         summary:
           'One page of a database\'s categories, each with its entry count and the attributes its domains carry (e.g. "ads", "cn").',
