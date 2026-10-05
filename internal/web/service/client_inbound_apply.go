@@ -651,13 +651,18 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		if push && len(clients) > nodeBulkPushThreshold {
 			push = false
 		}
-		// sing-box credentials are per-machine and live in settings.clients[],
-		// not in the shared client row: /clients/add would push THIS panel's
-		// password onto the node. Always converge via the whole-inbound
-		// reconcile instead, which carries the node's own credentials.
-		if push && oldInbound.Protocol.IsSingbox() {
-			push = false
-		}
+		// sing-box credentials are per-machine and live in settings.clients[].
+		// For a node-attached sing-box inbound, the central row's settings.clients[]
+		// IS the node's own credential mirror (adopted from the node and kept in
+		// step by per-machine writes), so the payload this panel just committed
+		// already carries the node-side machine password — /clients/add on the node
+		// is the correct convergence call. Without it the node's sing-box never
+		// learns a client the master created from its UI (its 10s reconcile renders
+		// only the node's own DB, which no master-side client op ever updates).
+		// The old guard ("push would write THIS panel's password") was true only
+		// when the central row copied the master-machine credential; with the
+		// mirror semantics any per-machine credential mint-and-sync has to ride
+		// this push.
 		for _, client := range clients {
 			// /clients/add on the node historically coerced enable=true; skip live
 			// push for disabled clients and leave dirty so reconcile converges.
