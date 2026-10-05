@@ -79,6 +79,24 @@ xray and sing-box, so restarting it drops every live client connection for a few
 seconds. Deploys therefore happen in the low-traffic window (after ~01:00), never
 automatically.
 
-Build artifacts come from `release.yml`. A deploy is: pull the artifact, verify
-its checksum, replace the binary atomically, restart, check health, and keep the
-previous binary for rollback.
+Build artifacts come from `release.yml`, which publishes a static musl binary to
+the rolling `dev-latest` pre-release on every `master` merge.
+
+Deploy with [`deploy/deploy.sh`](deploy/deploy.sh):
+
+```bash
+./deploy/deploy.sh --health-only   # check both hosts, change nothing
+./deploy/deploy.sh                 # deploy dev-latest to both hosts
+```
+
+It verifies the release checksum, replaces only `/usr/local/x-ui/x-ui` (the
+hand-built `sing-box` and per-host config are left alone), runs a health gate, and
+rolls back automatically if the gate fails. Full detail in
+[`deploy/PRODUCTION.md`](deploy/PRODUCTION.md) and
+[`specs/0001-deploy-pipeline.md`](specs/0001-deploy-pipeline.md).
+
+## Specs
+
+Changes that touch runtime behavior, data, protocols or operations get a spec in
+[`specs/`](specs/) before implementation. See [`specs/README.md`](specs/README.md)
+for when one is required and the lifecycle.
