@@ -73,4 +73,4 @@ it is trusted.
 | Spec | Title | Status |
 | --- | --- | --- |
 | [0001](0001-deploy-pipeline.md) | Release deploy pipeline and health gate | Shipped |
-| [0002](0002-traffic-multiplier.md) | Per-inbound traffic multiplier (residential 2×) | Implementing |
+| [0002](0002-traffic-multiplier.md) | Per-inbound traffic multiplier (cheap routes 1×, CN2GIA 1.5×, residential) | Shipped |

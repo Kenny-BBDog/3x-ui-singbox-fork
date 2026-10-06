@@ -1,13 +1,15 @@
-# 0002 — Per-inbound traffic multiplier (residential 2×)
+# 0002 — Per-inbound traffic multiplier (cheap routes 1×, CN2GIA 1.5×, residential)
 
-Status: Implementing
+Status: Shipped
 Owner: Kenny-BBDog
 Created: 2026-10-05
 Supersedes: none
 
+Shipped 2026-10-06. Deployed commit `9012175c`, binary `ea19670c43f69be0…`, both hosts.
+
 ## Rollout progress (2026-10-06)
 
-Steps 1 and 2 are done and verified in production. Step 3 is a remaining decision.
+All three steps are done and verified in production.
 
 **Step 1 — shipped.** The accounting change went out with every multiplier at 1
 (`dev-latest` commit `cc66ec5b`, PR #14). Both hosts migrated
@@ -29,16 +31,31 @@ defects were found by this step and fixed before going further:
   and stored 1. Since the value reaches the node through the stored row, it never
   propagated either — which is why step 2 could not pass until this was fixed.
 
-**Step 2 — verified.** With PR #18 deployed (`dev-latest` commit `5e7c956c`), a
-mirror inbound on the master (`n1-res-30001`) was set to 2 through the panel API
-(`POST /panel/api/inbounds/update/:id`). The master stored 2, and the node's own
-row (`res-30001`) read 2 within one reconcile tick (under 5 seconds). Reverting to
-1 propagated back the same way. Both hosts end at every multiplier = 1 and
-`raw == weighted` on every row.
+**Step 2 — verified.** A mirror inbound on the master (`n1-res-30001`) was set to 2
+through the panel API (`POST /panel/api/inbounds/update/:id`). The master stored 2,
+and the node's own row (`res-30001`) read 2 within one reconcile tick (under 5
+seconds). Reverting to 1 propagated back the same way.
 
-**Step 3 — not started.** Setting the residential and CN2GIA inbounds to 2× is a
-data change (no restart) and it changes what customers can actually consume, so it
-is left as an explicit decision.
+**Fractional weights (PR #20).** 1.5× was needed for CN2GIA, which the first
+release could not express at all — the column was `INTEGER`. Decision 3 was
+revised accordingly and the column widened `INTEGER` → `REAL`; see Model and
+Migration. Verified on copies of both production databases before deploying.
+
+**Step 3 — applied.** Weights set through the panel API:
+
+| Inbound | Route | Weight |
+| --- | --- | --- |
+| id 20 `inbound-dmit-anytls` | CN2GIA (DMIT) | **1.5** |
+| ids 56–65 `n1-res-3000N` (node ids 16–25) | residential, 10 lines | **1.5** |
+| id 55 `n1-inbound-la-anytls` (node id 15) | 4837 (LA) | 1 (unchanged) |
+
+The node received all ten residential weights within one reconcile tick, and its
+own main line stayed at 1.
+
+**Measured live.** Over a 90-second interval on the master, weighted usage grew
+1.119 MB while raw grew 1.068 MB — a ratio of **1.048**, where every ratio was
+exactly 1.0000 before the weights were set. Traffic crossing a 1.5× route is
+therefore being charged 1.5× and the quota depletes accordingly.
 
 ## Problem
 
@@ -401,23 +418,28 @@ whole numbers unchanged.
 
 ## Rollout
 
-Three steps, ordered so each one is verifiable before the next, and the
-irreversible one is last.
+Done. Kept as the record of the order, which is the part worth repeating for the
+next data-affecting change.
 
 1. **Ship the accounting change with every multiplier at 1.** Weighted and raw are
    identical, so a bug in the weighting path cannot move any customer's number yet.
-   Verify the raw columns match `up`/`down` and that no total shifted.
 2. **Verify the propagation.** Set one inbound's multiplier, confirm the node
-   received it (via the existing reconcile) and that the node's own counters are
-   weighted, before relying on it.
-3. **Set the residential and CN2GIA inbounds to 2×.** A data change, no restart,
-   effective for subsequent bytes.
+   received it, before relying on it. This is what exposed PR #18.
+3. **Set the route weights.** A data change, no restart, effective for subsequent
+   bytes.
 
-Deploy through `deploy/deploy.sh` in the low-traffic window (after ~01:00), as the
-restart drops connections for a few seconds. Step 3 needs no restart at all.
+Deploy went through `deploy/deploy.sh` in the low-traffic window; the restart drops
+connections for a few seconds. Step 3 needed no restart at all.
 
 Known and accepted during rollout: bytes metered between setting the multiplier and
-the node receiving it are charged at the old weight.
+the node receiving it are charged at the old weight — one reconcile tick.
+
+**Operational note.** The 2026-10-06 weights were applied through the panel API with
+a short-lived admin token minted directly in the `api_tokens` table and deleted
+afterwards, because a token's plaintext cannot be recovered from storage (it holds
+`sha256(plaintext)`). A token can be created in the panel UI instead; the reason to
+script it was that the change was 11 inbounds at once and needed to be checked in a
+dry run first.
 
 ## Decisions
 
