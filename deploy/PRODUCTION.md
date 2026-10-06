@@ -127,6 +127,22 @@ cp -a /root/x-ui.bin.pre-deploy-<UTC> /usr/local/x-ui/x-ui
 systemctl start x-ui
 ```
 
+## Back up the database too
+
+The script backs up the **binary**, not the database. The panel runs its schema
+migrations on first start, so before deploying a build that changes the schema,
+copy the database on each host as well:
+
+```bash
+cp -a /etc/x-ui/x-ui.db /root/x-ui.db.pre-deploy-<UTC>
+```
+
+To inspect a live database afterwards, copy **`x-ui.db` together with `-wal` and
+`-shm`**: the write-ahead log can be several megabytes, and a copy of `x-ui.db`
+alone can show a migration that has not been checkpointed yet as absent. Neither
+host has `sqlite3` installed; both have `python3`, whose `sqlite3` module reads
+the trio correctly.
+
 ## Prerequisites
 
 - Git Bash (the script is bash; it is not a PowerShell script).

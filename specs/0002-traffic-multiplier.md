@@ -5,6 +5,41 @@ Owner: Kenny-BBDog
 Created: 2026-10-05
 Supersedes: none
 
+## Rollout progress (2026-10-06)
+
+Steps 1 and 2 are done and verified in production. Step 3 is a remaining decision.
+
+**Step 1 — shipped.** The accounting change went out with every multiplier at 1
+(`dev-latest` commit `cc66ec5b`, PR #14). Both hosts migrated
+(`inbounds.traffic_multiplier`, `client_traffics.raw_up`/`raw_down`,
+`node_client_traffics.raw_up`/`raw_down`) and no accumulated total moved. Two
+defects were found by this step and fixed before going further:
+
+- **PR #16**: the node-merge baseline was written before the raw columns existed,
+  so its raw pair was 0 while the snapshot already reports raw. The existing
+  fallback covered only the snapshot side, so the first tick after the deploy
+  charged each node's entire accumulated history into `raw_up` a second time
+  (`raw_up = up + the node's whole total`). The weighted columns — what quota
+  enforcement and the UI read — were never affected. The raw baseline is now
+  seeded from the weighted one, the same rule the `client_traffics` backfill uses.
+  The inflated values on the primary were corrected back to `raw == weighted`
+  (10 rows, backup at `/root/x-ui.db.pre-rawrepair-<UTC>`).
+- **PR #18**: `UpdateInbound` copies fields onto the stored row explicitly and
+  `TrafficMultiplier` was not in that list, so setting the multiplier answered 200
+  and stored 1. Since the value reaches the node through the stored row, it never
+  propagated either — which is why step 2 could not pass until this was fixed.
+
+**Step 2 — verified.** With PR #18 deployed (`dev-latest` commit `5e7c956c`), a
+mirror inbound on the master (`n1-res-30001`) was set to 2 through the panel API
+(`POST /panel/api/inbounds/update/:id`). The master stored 2, and the node's own
+row (`res-30001`) read 2 within one reconcile tick (under 5 seconds). Reverting to
+1 propagated back the same way. Both hosts end at every multiplier = 1 and
+`raw == weighted` on every row.
+
+**Step 3 — not started.** Setting the residential and CN2GIA inbounds to 2× is a
+data change (no restart) and it changes what customers can actually consume, so it
+is left as an explicit decision.
+
 ## Problem
 
 Customers buy one quota (for example 100 GB) that is spent across **all** nodes,

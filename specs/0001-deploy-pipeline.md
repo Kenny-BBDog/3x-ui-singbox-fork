@@ -1,9 +1,36 @@
 # 0001 — Release deploy pipeline and health gate
 
-Status: Implementing
+Status: Shipped
 Owner: Kenny-BBDog
 Created: 2026-10-05
 Supersedes: none
+
+Deployed 2026-10-06 with `./deploy/deploy.sh`, both hosts, release `dev-latest`
+(`commit=cc66ec5b`). Deployed binary sha256 `9cd95b53348e60fe…`.
+
+Verification on the day, against production:
+
+- `--health-only` passed on both hosts before the swap (3 checks, 37 assets each).
+- `--dry-run` downloaded, verified the release checksum, and staged on both hosts
+  without touching the live binary.
+- The live deploy passed the gate on both hosts, in order primary then secondary,
+  and reported both managed children back up (`xray=3 sing-box=2` on the primary,
+  `xray=2 sing-box=2` on the secondary).
+- Rollback artifacts present: `/root/x-ui.bin.pre-deploy-<UTC>` on each host.
+- The schema migration the binary carries did not move any accumulated total
+  (checked the weighted `up`/`down` sums before and after).
+
+Two operational notes added by doing it for real:
+
+- **Back up the panel database before a migration-bearing deploy.** The script
+  backs up the binary, not the database. `cp -a /etc/x-ui/x-ui.db
+  /root/x-ui.db.pre-deploy-<UTC>` on each host.
+- **Copy the `-wal` alongside `x-ui.db` when inspecting a live database.** The
+  primary's WAL is several megabytes, so a copy of `x-ui.db` alone can show a
+  migration that has not been checkpointed yet as absent. The deploy itself is
+  unaffected; this is about what you see when you check the result.
+- Neither host has `sqlite3` installed; both have `python3`, which is enough to
+  inspect or repair a database over SSH.
 
 ## Problem
 
