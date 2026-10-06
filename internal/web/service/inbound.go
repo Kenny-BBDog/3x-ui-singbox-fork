@@ -45,6 +45,16 @@ func normalizeTrafficResetDay(day int) int {
 	return min(day, 31)
 }
 
+// normalizeTrafficMultiplier clamps a submitted per-inbound weight to a whole
+// number at least 1. Absent or zero means 1: an unweighted route, because the
+// column is NOT NULL DEFAULT 1 and gin binds an omitted int as 0.
+func normalizeTrafficMultiplier(mult int) int {
+	if mult < 1 {
+		return 1
+	}
+	return mult
+}
+
 func normalizeInboundShareAddrStrategy(strategy string) string {
 	strategy = strings.TrimSpace(strategy)
 	switch strategy {
@@ -1118,6 +1128,11 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		return inbound, false, common.NewErrorf("%s inbounds cannot be assigned to a node", inbound.Protocol)
 	}
 	inbound.SubSortIndex = normalizeSubSortIndex(inbound.SubSortIndex)
+	// A missing or zero multiplier on the payload means "unweighted", not "no
+	// restriction": the column is NOT NULL DEFAULT 1, and gin's int binding lands
+	// on 0 when the field is absent. Storing 0 would make the node's meter read it
+	// as a weight for every byte.
+	inbound.TrafficMultiplier = normalizeTrafficMultiplier(inbound.TrafficMultiplier)
 	if err := normalizeInboundShareAddressStrict(inbound); err != nil {
 		return inbound, false, err
 	}
@@ -1749,6 +1764,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		return inbound, false, err
 	}
 	inbound.SubSortIndex = normalizeSubSortIndex(inbound.SubSortIndex)
+	inbound.TrafficMultiplier = normalizeTrafficMultiplier(inbound.TrafficMultiplier)
 
 	// Grandfather a row that was already stored incomplete so it stays editable;
 	// only a save that breaks a previously valid TLS block is refused.
@@ -1898,6 +1914,11 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		oldInbound.Remark = inbound.Remark
 		oldInbound.SubSortIndex = inbound.SubSortIndex
 		oldInbound.ExcludeFromSub = inbound.ExcludeFromSub
+		// Every field the caller may change is copied onto the stored row one by
+		// one, so a field missing here is silently discarded on save. The
+		// multiplier is how the UI and the node's propagation both set a weight;
+		// leaving it out made a save answer 200 while the weight never changed.
+		oldInbound.TrafficMultiplier = inbound.TrafficMultiplier
 		oldInbound.Enable = inbound.Enable
 		oldInbound.ExpiryTime = inbound.ExpiryTime
 		oldInbound.TrafficReset = inbound.TrafficReset
