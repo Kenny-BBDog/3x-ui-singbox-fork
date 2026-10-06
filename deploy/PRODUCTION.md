@@ -151,3 +151,6 @@ the trio correctly.
 - `deploy/hosts.env`, filled in from the template.
 - The SSH key named by `PRIMARY_SSH_KEY`. Override per run with `--key` or `$SSH_KEY`.
 
+`--help` and argument validation work without `hosts.env`; anything that reaches a
+host needs it.
+

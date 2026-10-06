@@ -34,34 +34,16 @@ SERVICE="x-ui"
 # public, and those values describe live infrastructure. They are read from
 # deploy/hosts.env, which is gitignored. Copy hosts.env.example to hosts.env and
 # fill it in. See deploy/PRODUCTION.md.
+#
+# The file is loaded AFTER argument parsing, on purpose: --help and a rejected
+# argument must not depend on having a configuration file, and otherwise every
+# argparse check would "pass" merely because the config was missing.
 HOSTS_ENV="${HOSTS_ENV:-$(dirname "$0")/hosts.env}"
-if [[ ! -f "$HOSTS_ENV" ]]; then
-  printf 'ERROR: %s not found.\n\nCopy the template and fill in the real values:\n  cp "%s.example" "%s"\n' \
-    "$HOSTS_ENV" "$HOSTS_ENV" "$HOSTS_ENV" >&2
-  exit 1
-fi
-# shellcheck source=/dev/null
-source "$HOSTS_ENV"
-
-# Required values, named so a missing one produces a useful message.
-: "${PRIMARY_HOST:?set PRIMARY_HOST in $HOSTS_ENV}"
-: "${PRIMARY_SSH_KEY:?set PRIMARY_SSH_KEY in $HOSTS_ENV}"
-: "${PRIMARY_BASE:?set PRIMARY_BASE in $HOSTS_ENV}"
-: "${PRIMARY_ORIGIN:?set PRIMARY_ORIGIN in $HOSTS_ENV}"
-: "${PRIMARY_ASSET_DIR:?set PRIMARY_ASSET_DIR in $HOSTS_ENV}"
-: "${SECONDARY_HOST:?set SECONDARY_HOST in $HOSTS_ENV}"
-: "${SECONDARY_JUMP_KEY:?set SECONDARY_JUMP_KEY in $HOSTS_ENV}"
-: "${SECONDARY_BASE:?set SECONDARY_BASE in $HOSTS_ENV}"
-: "${SECONDARY_ORIGIN:?set SECONDARY_ORIGIN in $HOSTS_ENV}"
-: "${SECONDARY_ASSET_DIR:?set SECONDARY_ASSET_DIR in $HOSTS_ENV}"
-PRIMARY_CURL_EXTRA="${PRIMARY_CURL_EXTRA:-}"
 
 TAG="dev-latest"
 HOSTS="both"
 DRY_RUN=0
 HEALTH_ONLY=0
-# The key may be overridden per invocation; the configured value is the default.
-SSH_KEY="${SSH_KEY:-$PRIMARY_SSH_KEY}"
 
 # --------------------------------------------------------------------- output
 
@@ -119,6 +101,34 @@ case "$HOSTS" in
   both) TARGETS=(primary secondary) ;;
   *)    die "--hosts must be primary, secondary or both (got '$HOSTS')" ;;
 esac
+
+# ------------------------------------------------------------------- config
+#
+# Loaded here, after the argument parser, so an unknown flag, a bad --hosts
+# value and --help all behave correctly even with no configuration file present.
+if [[ ! -f "$HOSTS_ENV" ]]; then
+  printf 'ERROR: %s not found.\n\nCopy the template and fill in the real values:\n  cp "%s.example" "%s"\n' \
+    "$HOSTS_ENV" "$HOSTS_ENV" "$HOSTS_ENV" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$HOSTS_ENV"
+
+# Required values, named so a missing one produces a useful message.
+: "${PRIMARY_HOST:?set PRIMARY_HOST in $HOSTS_ENV}"
+: "${PRIMARY_SSH_KEY:?set PRIMARY_SSH_KEY in $HOSTS_ENV}"
+: "${PRIMARY_BASE:?set PRIMARY_BASE in $HOSTS_ENV}"
+: "${PRIMARY_ORIGIN:?set PRIMARY_ORIGIN in $HOSTS_ENV}"
+: "${PRIMARY_ASSET_DIR:?set PRIMARY_ASSET_DIR in $HOSTS_ENV}"
+: "${SECONDARY_HOST:?set SECONDARY_HOST in $HOSTS_ENV}"
+: "${SECONDARY_JUMP_KEY:?set SECONDARY_JUMP_KEY in $HOSTS_ENV}"
+: "${SECONDARY_BASE:?set SECONDARY_BASE in $HOSTS_ENV}"
+: "${SECONDARY_ORIGIN:?set SECONDARY_ORIGIN in $HOSTS_ENV}"
+: "${SECONDARY_ASSET_DIR:?set SECONDARY_ASSET_DIR in $HOSTS_ENV}"
+PRIMARY_CURL_EXTRA="${PRIMARY_CURL_EXTRA:-}"
+
+# The key may be overridden per invocation; the configured value is the default.
+SSH_KEY="${SSH_KEY:-$PRIMARY_SSH_KEY}"
 
 for tool in ssh scp tar curl sha256sum; do
   command -v "$tool" >/dev/null 2>&1 || die "missing required tool: $tool"
