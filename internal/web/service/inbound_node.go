@@ -568,11 +568,22 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		return false, err
 	}
 	for i := range baselineRows {
-		nodeBaselines[baselineRows[i].Email] = nodeTrafficCounter{
-			Up:      baselineRows[i].Up,
-			Down:    baselineRows[i].Down,
-			RawUp:   baselineRows[i].RawUp,
-			RawDown: baselineRows[i].RawDown,
+		b := baselineRows[i]
+		// A baseline persisted before the raw columns existed carries raw 0 while
+		// its weighted counters hold the node's real accumulated totals. The
+		// snapshot now reports the raw pair, and each delta is taken per field, so
+		// a raw baseline left at 0 would charge the node's entire history into
+		// raw_up a second time on the first tick after this build ships. Seed the
+		// raw baseline from the weighted one instead: every byte the node had
+		// accumulated was metered while a multiplier could only be 1 (multipliers
+		// are set after this build exists), so the weighted total is the honest
+		// raw value — the same rule the client_traffics backfill uses.
+		rawUp, rawDown := b.RawUp, b.RawDown
+		if rawUp == 0 && rawDown == 0 {
+			rawUp, rawDown = b.Up, b.Down
+		}
+		nodeBaselines[b.Email] = nodeTrafficCounter{
+			Up: b.Up, Down: b.Down, RawUp: rawUp, RawDown: rawDown,
 		}
 	}
 

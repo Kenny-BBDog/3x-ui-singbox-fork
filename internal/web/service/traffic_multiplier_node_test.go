@@ -92,6 +92,77 @@ func TestSetRemoteTraffic_AddsNodeWeightedDeltaWithoutReweighting(t *testing.T) 
 	}
 }
 
+// A baseline persisted before the raw columns existed holds raw 0 while its
+// weighted counters carry the node's real totals. This is the state every
+// production baseline was in the moment this feature first shipped, so the master
+// must seed the raw baseline from the weighted one. Reading raw 0 as "the node has
+// metered nothing" instead charges the node's entire accumulated history into
+// raw_up a second time on the first tick — measured on production as raw_up ≈
+// up + the node's whole total, which is impossible while every multiplier is 1.
+func TestSetRemoteTraffic_SeedsRawBaselineFromWeightedForPreRawBaseline(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	dbtest.InitDB(t, filepath.Join(dbDir, "x-ui.db"))
+	db := database.GetDB()
+
+	const nodeID = 1
+	const email = "migrated-baseline@example.com"
+	const uid = "cc33dd44-ee55-4f66-a077-bb8899001122"
+
+	if err := db.Create(&xray.ClientTraffic{
+		InboundId: 1, Email: email, Enable: true, Total: 10_000,
+	}).Error; err != nil {
+		t.Fatalf("seed client row: %v", err)
+	}
+	if err := db.Create(&model.ClientRecord{Email: email, UUID: uid, Enable: true}).Error; err != nil {
+		t.Fatalf("seed client record: %v", err)
+	}
+	id := nodeID
+	if err := db.Create(&model.Inbound{
+		UserId: 1, NodeID: &id, Tag: "n1-migrated", Enable: true, Port: 30003,
+		Protocol: model.VLESS,
+		Settings: `{"clients":[{"email":"` + email + `","id":"` + uid + `","enable":true}]}`,
+	}).Error; err != nil {
+		t.Fatalf("create node inbound: %v", err)
+	}
+	// The baseline as it was written before raw columns existed: weighted totals
+	// present, raw left at zero.
+	if err := db.Create(&model.NodeClientTraffic{
+		NodeId: nodeID, Email: email, Up: 500, Down: 0, RawUp: 0, RawDown: 0,
+	}).Error; err != nil {
+		t.Fatalf("seed pre-raw baseline: %v", err)
+	}
+
+	snap := &runtime.TrafficSnapshot{
+		Inbounds: []*model.Inbound{
+			{
+				Tag: "n1-migrated", Enable: true, Port: 30003, Protocol: model.VLESS,
+				Settings: `{"clients":[{"email":"` + email + `","id":"` + uid + `","enable":true}]}`,
+				ClientStats: []xray.ClientTraffic{
+					{Email: email, Up: 520, Down: 0, RawUp: 520, RawDown: 0},
+				},
+			},
+		},
+	}
+
+	svc := InboundService{}
+	if _, err := svc.setRemoteTrafficLocked(nodeID, snap, false, false); err != nil {
+		t.Fatalf("setRemoteTrafficLocked: %v", err)
+	}
+
+	got := reloadTraffic(t, email)
+	if want := int64(20); got.Up != want {
+		t.Errorf("weighted up = %d, want %d (520 - 500 baseline)", got.Up, want)
+	}
+	// The regression: 520 here meant the whole node total was charged twice.
+	if want := int64(20); got.RawUp != want {
+		t.Errorf("raw up = %d, want %d (only the 20-byte delta, not the node's whole 520)", got.RawUp, want)
+	}
+	if got.RawUp > got.Up {
+		t.Errorf("raw up (%d) exceeds weighted up (%d), which no multiplier >= 1 can produce", got.RawUp, got.Up)
+	}
+}
+
 // A node build predating the multiplier reports no raw pair. The master must fall
 // back to treating the weighted value as raw, not add zero and lose the audit
 // trail or double-count the fallback.
