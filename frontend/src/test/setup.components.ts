@@ -80,41 +80,77 @@ if (!i18next.isInitialized) {
   });
 }
 
-// Drain the event-loop phases React's work can be queued on.
+// Track timers scheduled during a test, so teardown can cancel the ones still
+// pending instead of waiting for them.
 //
 // React 19 dispatches its scheduled work from a check-phase callback
-// (`setImmediate`; the CI stack shows `processImmediate node:internal/timers`),
-// and that callback reads `window.event`. If it is still pending when vitest
-// tears the jsdom environment down it throws "window is not defined" — no
-// assertion fails, but vitest counts an unhandled error and the run exits
-// non-zero.
+// (`setImmediate`; the CI stack shows `processImmediate node:internal/timers`) and
+// that callback reads `window.event`. If it is still pending when vitest tears the
+// jsdom environment down, it throws "window is not defined": no assertion fails,
+// but vitest counts an unhandled error and the run exits non-zero. rc-motion
+// (AntD's dropdown and modal animations) keeps rescheduling, so a bounded drain
+// either finishes too early or never converges — measured: a converging drain made
+// the components project take 1178s instead of 173s and still hit its ceiling.
 //
-// Draining only the timers phase (the previous `setTimeout` loop) cannot flush a
-// check-phase callback, and an `act` flush only pumps React's own act queue and
-// microtasks — neither reaches the phase React actually uses. Alternating both
-// phases is what makes the flush complete: Node runs check-phase callbacks
-// FIFO, so awaiting `setImmediate` runs the pending one, and awaiting
-// `setTimeout` clears anything that queued a timer in turn.
-async function drainEventLoopPhases(): Promise<void> {
-  const immediate =
-    typeof (globalThis as { setImmediate?: unknown }).setImmediate === 'function'
-      ? (cb: () => void) => setImmediate(cb)
-      : (cb: () => void) => setTimeout(cb, 0);
-  for (let i = 0; i < 3; i += 1) {
-    await new Promise<void>((resolve) => immediate(resolve));
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+// Cancelling is deterministic and cheap: nothing that a test left pending should
+// outlive the test anyway.
+const liveTimers = new Set<ReturnType<typeof setTimeout>>();
+type TimerFn = (handler: TimerHandler, timeout?: number, ...args: unknown[]) => unknown;
+
+// The untracked scheduler, captured before the wrappers below replace the global.
+// Used by the flush so the flush itself is never counted as leaked work.
+const nativeSetTimeout = setTimeout;
+
+function trackTimers(): void {
+  const g = globalThis as Record<string, unknown>;
+  for (const name of ['setTimeout', 'setInterval'] as const) {
+    const original = g[name];
+    if (typeof original !== 'function') {
+      continue;
+    }
+    const fn = original as TimerFn;
+    g[name] = (handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      const id = fn(handler, timeout, ...args) as ReturnType<typeof setTimeout>;
+      liveTimers.add(id);
+      return id;
+    };
   }
 }
 
+function cancelPendingTimers(): void {
+  const g = globalThis as Record<string, unknown>;
+  const clearTimeoutFn = g.clearTimeout as ((id: unknown) => void) | undefined;
+  const clearIntervalFn = g.clearInterval as ((id: unknown) => void) | undefined;
+  for (const id of liveTimers) {
+    clearTimeoutFn?.(id);
+    clearIntervalFn?.(id);
+  }
+  liveTimers.clear();
+}
+
+trackTimers();
+
+// Flush what is already queued, cheaply: let pending macrotasks and microtasks
+// run, without waiting for anything that keeps rescheduling. Combined with
+// cancelPendingTimers this covers both halves — run what is due now, drop what is
+// still pending.
+async function flushQueuedWork(): Promise<void> {
+  await Promise.resolve();
+  await new Promise<void>((resolve) => {
+    nativeSetTimeout(resolve, 0);
+  });
+}
+
 afterEach(async () => {
-  // Before unmounting: flush work the test itself left queued.
-  await drainEventLoopPhases();
+  // Run work the test left due, then unmount (which is itself what schedules
+  // React's passive-effect flush), then run that too.
+  await flushQueuedWork();
   cleanup();
   document.body.innerHTML = '';
-  // After unmounting: unmounting is what schedules React's passive-effect flush,
-  // so the queue is populated here, not before. This is the half the previous
-  // ordering missed.
-  await drainEventLoopPhases();
+  await flushQueuedWork();
+  // Whatever is still pending would otherwise fire after jsdom is gone. Cancelling
+  // it is safe: a test that leaks a timer has no assertion left to satisfy.
+  cancelPendingTimers();
 });
 
 import { HttpUtil, Msg } from '@/utils';
