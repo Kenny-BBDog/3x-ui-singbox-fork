@@ -251,6 +251,20 @@ describe('formValuesToWirePayload', () => {
     expect(payload.shareAddr).toBe('edge.example.test');
   });
 
+  it('round-trips the traffic multiplier', () => {
+    const values = rawInboundToFormValues({ ...vlessRow, trafficMultiplier: 2 });
+    expect(values.trafficMultiplier).toBe(2);
+    expect(formValuesToWirePayload(values).trafficMultiplier).toBe(2);
+  });
+
+  it('coerces an absent or zero traffic multiplier to 1', () => {
+    // The column defaults to 1 and predates this field, so a row that never
+    // carried it (or carried 0) must read as 1:1, never as a zero weight that
+    // would stop a node counting traffic at all.
+    expect(rawInboundToFormValues(vlessRow).trafficMultiplier).toBe(1);
+    expect(rawInboundToFormValues({ ...vlessRow, trafficMultiplier: 0 }).trafficMultiplier).toBe(1);
+  });
+
   it('round-trips top-level fields through raw → values → payload → values', () => {
     // settings/streamSettings/sniffing don't round-trip byte-equal because
     // the wire payload prunes empty arrays and collapses disabled sniffing
@@ -276,6 +290,7 @@ describe('formValuesToWirePayload', () => {
       trafficResetDay: payload.trafficResetDay,
       lastTrafficResetTime: payload.lastTrafficResetTime,
       nodeId: payload.nodeId ?? null,
+      trafficMultiplier: payload.trafficMultiplier,
     });
     expect(replay.protocol).toBe(original.protocol);
     expect(replay.port).toBe(original.port);

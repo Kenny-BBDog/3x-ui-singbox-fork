@@ -180,6 +180,17 @@ func sbGetStats(ctx context.Context, conn *grpc.ClientConn, name string) (int64,
 // PollTraffic reads per-user cumulative counters from the sing-box v2ray
 // stats API and persists deltas into client_traffics — the same store, and
 // the same semantics, as Xray's own traffic job. Runs from cron every ~5s.
+//
+// Counters are read per (inbound, client) meter label, not per client, because
+// sing-box reports traffic per label and a label shared across inbounds cannot be
+// attributed to one route. Each label's delta is weighted by its inbound's
+// traffic multiplier, then the deltas are summed per email — the number the
+// quota comparison and every existing reader already expect.
+//
+// The weight is applied here, on the host that metered the bytes, exactly once.
+// The master never re-weights what a node reports; it adds the node's delta to
+// the client's row (see SetRemoteTraffic), so a customer's single quota pool
+// stays correct across nodes.
 func (s *SingboxService) PollTraffic() error {
 	if !singbox.GetManager().IsRunning() {
 		return nil
@@ -188,19 +199,30 @@ func (s *SingboxService) PollTraffic() error {
 	if err != nil {
 		return err
 	}
-	// collect the (inbound id, email) pairs we meter
+	// Build label -> (inbound id, email, multiplier) for the inbounds this panel
+	// meters itself. The map is the attribution source; labels are never parsed
+	// back apart, so an unusual tag or email cannot misattribute traffic.
 	type meter struct {
-		inboundId int
+		inboundId  int
+		multiplier int
 	}
 	users := make(map[string]meter)
+	emailOf := make(map[string]string)
 	for _, in := range inbounds {
 		if !in.Protocol.IsSingbox() || in.NodeID != nil {
 			continue
 		}
+		mult := in.TrafficMultiplier
+		if mult < 1 {
+			mult = 1
+		}
 		for _, st := range in.ClientStats {
-			if st.Email != "" {
-				users[st.Email] = meter{inboundId: in.Id}
+			if st.Email == "" {
+				continue
 			}
+			label := singbox.MeterLabel(in.Tag, st.Email)
+			users[label] = meter{inboundId: in.Id, multiplier: mult}
+			emailOf[label] = st.Email
 		}
 	}
 	if len(users) == 0 {
@@ -217,20 +239,33 @@ func (s *SingboxService) PollTraffic() error {
 	sbTraffic.mu.Lock()
 	defer sbTraffic.mu.Unlock()
 
-	var updated []*xray.ClientTraffic
-	for email, m := range users {
-		up, upErr := sbGetStats(ctx, conn, "user>>>"+email+">>>traffic>>>uplink")
-		down, downErr := sbGetStats(ctx, conn, "user>>>"+email+">>>traffic>>>downlink")
+	// Accumulate per email: one row per client, as before.
+	type accumulator struct {
+		inboundId int
+		rawUp     int64
+		rawDown   int64
+		up        int64
+		down      int64
+	}
+	byEmail := make(map[string]*accumulator, len(users))
+	order := make([]string, 0, len(users))
+
+	for label, m := range users {
+		up, upErr := sbGetStats(ctx, conn, "user>>>"+label+">>>traffic>>>uplink")
+		down, downErr := sbGetStats(ctx, conn, "user>>>"+label+">>>traffic>>>downlink")
 		if upErr != nil || downErr != nil {
-			// counters exist only after the user's first connection; and a
-			// not-found error after traffic is a transient/unknown email
+			// counters exist only after the label's first connection; and a
+			// not-found error after traffic is a transient/unknown label
 			continue
 		}
-		prevUp := sbTraffic.lastUp[email]
-		prevDown := sbTraffic.lastDown[email]
+		// Baseline the RAW counter. The weight can change under a live counter
+		// (an operator raising a multiplier) without that being a reset, so the
+		// delta must be computed on the raw value and only then weighted.
+		prevUp := sbTraffic.lastUp[label]
+		prevDown := sbTraffic.lastDown[label]
 		dUp, dDown := up-prevUp, down-prevDown
-		sbTraffic.lastUp[email] = up
-		sbTraffic.lastDown[email] = down
+		sbTraffic.lastUp[label] = up
+		sbTraffic.lastDown[label] = down
 		if dUp <= 0 && dDown <= 0 {
 			continue
 		}
@@ -238,12 +273,34 @@ func (s *SingboxService) PollTraffic() error {
 			// process restarted; counters reset — re-baseline, no delta
 			continue
 		}
-		updated = append(updated, &xray.ClientTraffic{
-			InboundId: m.inboundId, Email: email, Up: dUp, Down: dDown,
-		})
+
+		email := emailOf[label]
+		acc := byEmail[email]
+		if acc == nil {
+			acc = &accumulator{inboundId: m.inboundId}
+			byEmail[email] = acc
+			order = append(order, email)
+		}
+		acc.rawUp += dUp
+		acc.rawDown += dDown
+		acc.up += dUp * int64(m.multiplier)
+		acc.down += dDown * int64(m.multiplier)
 	}
-	if len(updated) == 0 {
+	if len(order) == 0 {
 		return nil
+	}
+
+	updated := make([]*xray.ClientTraffic, 0, len(order))
+	for _, email := range order {
+		acc := byEmail[email]
+		updated = append(updated, &xray.ClientTraffic{
+			InboundId: acc.inboundId,
+			Email:     email,
+			Up:        acc.up,
+			Down:      acc.down,
+			RawUp:     acc.rawUp,
+			RawDown:   acc.rawDown,
+		})
 	}
 	_, _, _ = s.inboundService.AddTraffic(nil, updated)
 	return nil

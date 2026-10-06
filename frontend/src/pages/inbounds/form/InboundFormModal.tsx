@@ -717,6 +717,17 @@ export default function InboundFormModal({
         <Switch />
       </FormField>
 
+      <FormField
+        name="trafficMultiplier"
+        label={labelWithHint(
+          t('pages.inbounds.form.trafficMultiplier'),
+          t('pages.inbounds.form.trafficMultiplierHelp'),
+        )}
+        rules={{ validate: rhfZodValidate(InboundDbFieldsSchema.shape.trafficMultiplier) }}
+      >
+        <InputNumber min={1} max={1000} />
+      </FormField>
+
       {protocol === Protocols.VLESS && (
         <FormField
           name="disableFlow"

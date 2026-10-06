@@ -34,6 +34,8 @@ export interface DBInboundRecord extends ProtocolFlags {
   expiryTime: number;
   _expiryTime: { valueOf(): number } | null;
   nodeId?: number | null;
+  /** How fast this inbound consumes a quota: 2 means every byte counts twice. */
+  trafficMultiplier?: number;
   settings: unknown;
   streamSettings: unknown;
 }

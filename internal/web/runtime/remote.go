@@ -817,6 +817,16 @@ func wireInbound(ib *model.Inbound, remoteNodeID int) url.Values {
 	v.Set("remark", ib.Remark)
 	v.Set("subSortIndex", strconv.Itoa(ib.SubSortIndex))
 	v.Set("excludeFromSub", strconv.FormatBool(ib.ExcludeFromSub))
+	// The node meters this inbound's traffic, so the weight has to travel with the
+	// inbound. It must arrive before the bytes it weights flow: accounting is not
+	// retroactive, so a byte metered in the gap is charged at the old weight.
+	{
+		mult := ib.TrafficMultiplier
+		if mult < 1 {
+			mult = 1
+		}
+		v.Set("trafficMultiplier", strconv.Itoa(mult))
+	}
 	v.Set("enable", strconv.FormatBool(ib.Enable))
 	v.Set("expiryTime", strconv.FormatInt(ib.ExpiryTime, 10))
 	v.Set("listen", ib.Listen)

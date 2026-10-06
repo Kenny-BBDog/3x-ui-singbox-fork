@@ -2281,6 +2281,17 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "rawDown": {
+        "example": 2097152,
+        "format": "int64",
+        "type": "integer"
+      },
+      "rawUp": {
+        "description": "RawUp and RawDown are the unweighted bytes behind Up/Down. Up/Down carry\nthe weighted value (what quota enforcement compares against Total), so a\nnode with a traffic multiplier depletes a quota faster; these keep the true\nbyte count so a mis-set multiplier stays auditable and correctable rather\nthan being permanently baked into the total. Equal to Up/Down while every\ninbound is 1x.",
+        "example": 1048576,
+        "format": "int64",
+        "type": "integer"
+      },
       "reset": {
         "example": 0,
         "type": "integer"
@@ -2333,6 +2344,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "inboundId",
       "lastOnline",
       "lastSubFetch",
+      "rawDown",
+      "rawUp",
       "reset",
       "resetCount",
       "resetDay",
@@ -3129,6 +3142,13 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "trafficMultiplier": {
+        "description": "TrafficMultiplier weights every byte metered on this inbound when it is\ncharged against a client's quota, so a more expensive route (residential,\nCN2GIA) can consume a quota faster than a cheap high-volume line. 1 means\n1:1. Integer only: a fractional weight would make every byte inexact for no\nproduct need. Only meaningful for a local inbound — a mirror row carries the\nvalue so the UI can show it, and the node that meters the traffic applies it.",
+        "example": 1,
+        "maximum": 1000,
+        "minimum": 1,
+        "type": "integer"
+      },
       "trafficReset": {
         "description": "Traffic reset schedule",
         "enum": [
@@ -3174,6 +3194,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subSortIndex",
       "tag",
       "total",
+      "trafficMultiplier",
       "trafficReset",
       "trafficResetDay",
       "up"

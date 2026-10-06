@@ -544,6 +544,8 @@ export interface ClientTraffic {
   inboundId: number;
   lastOnline: number;
   lastSubFetch: number;
+  rawDown: number;
+  rawUp: number;
   reset: number;
   resetCount: number;
   resetDay: number;
@@ -724,6 +726,7 @@ export interface Inbound {
   subSortIndex: number;
   tag: string;
   total: number;
+  trafficMultiplier: number;
   trafficReset: string;
   trafficResetDay: number;
   up: number;

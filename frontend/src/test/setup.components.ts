@@ -80,21 +80,41 @@ if (!i18next.isInitialized) {
   });
 }
 
+// Drain the event-loop phases React's work can be queued on.
+//
+// React 19 dispatches its scheduled work from a check-phase callback
+// (`setImmediate`; the CI stack shows `processImmediate node:internal/timers`),
+// and that callback reads `window.event`. If it is still pending when vitest
+// tears the jsdom environment down it throws "window is not defined" — no
+// assertion fails, but vitest counts an unhandled error and the run exits
+// non-zero.
+//
+// Draining only the timers phase (the previous `setTimeout` loop) cannot flush a
+// check-phase callback, and an `act` flush only pumps React's own act queue and
+// microtasks — neither reaches the phase React actually uses. Alternating both
+// phases is what makes the flush complete: Node runs check-phase callbacks
+// FIFO, so awaiting `setImmediate` runs the pending one, and awaiting
+// `setTimeout` clears anything that queued a timer in turn.
+async function drainEventLoopPhases(): Promise<void> {
+  const immediate =
+    typeof (globalThis as { setImmediate?: unknown }).setImmediate === 'function'
+      ? (cb: () => void) => setImmediate(cb)
+      : (cb: () => void) => setTimeout(cb, 0);
+  for (let i = 0; i < 3; i += 1) {
+    await new Promise<void>((resolve) => immediate(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 afterEach(async () => {
+  // Before unmounting: flush work the test itself left queued.
+  await drainEventLoopPhases();
   cleanup();
   document.body.innerHTML = '';
-  /*
-   * React 19 defers passive-effect flushes onto a macrotask (setImmediate),
-   * whose callback reads `window.event`. If one is still queued when vitest
-   * tears down the jsdom environment, it fires after `window` is gone and
-   * throws "window is not defined". Drain a few macrotask ticks here so any
-   * pending callback runs while `window` still exists. Several ticks are used
-   * because a microtask resolving mid-drain (rc-trigger/AntD) can queue a new
-   * one behind the first.
-   */
-  for (let i = 0; i < 3; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
+  // After unmounting: unmounting is what schedules React's passive-effect flush,
+  // so the queue is populated here, not before. This is the half the previous
+  // ordering missed.
+  await drainEventLoopPhases();
 });
 
 import { HttpUtil, Msg } from '@/utils';

@@ -694,7 +694,9 @@
         "bytesPerSecTip": "Eşik aşıldıktan sonra fallback trafiğine uygulanan hız sınırı (bayt/sn); böylece sondalar sunucunuzu hedefe ücretsiz bant genişliği olarak kullanamaz. 0 = sınır yok (bu yönü devre dışı bırakır).",
         "burstBytesPerSec": "Saniye Başına Patlama Baytı",
         "burstBytesPerSecTip": "Sabit hızın üzerindeki kısa patlamalar için pay (token-bucket boyutu). Saniye Başına Bayt değerinden düşükse ona eşitlenecek şekilde yükseltilir.",
-        "autoFill": "Otomatik Doldur"
+        "autoFill": "Otomatik Doldur",
+        "trafficMultiplier": "Traffic multiplier",
+        "trafficMultiplierHelp": "How fast a byte on this inbound counts against a client's quota. 1 means 1:1; 2 means every byte counts twice, so a customer who only uses this route can spend half as much data. Set this to reflect the route's cost (for example 2 for a residential or CN2GIA line) rather than a plan's size. Whole numbers only. Takes effect for new traffic after the node receives it; usage already counted is not re-charged."
       },
       "info": {
         "mode": "Mod",

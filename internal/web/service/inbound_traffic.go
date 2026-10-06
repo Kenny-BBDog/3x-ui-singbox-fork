@@ -183,14 +183,25 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		if !ok || (t.Up == 0 && t.Down == 0) {
 			continue
 		}
+		// Up/Down carry the weighted value the quota comparison uses; RawUp/RawDown
+		// carry the true bytes so a multiplier stays auditable. They are equal
+		// while every inbound is 1x. RawUp/RawDown are zero when a caller reports
+		// only weighted values (xray's own poller, which has no multiplier), so the
+		// raw columns hold still rather than double-counting in that case.
+		rawUp, rawDown := t.RawUp, t.RawDown
+		if rawUp == 0 && rawDown == 0 {
+			rawUp, rawDown = t.Up, t.Down
+		}
 		if err = tx.Exec(
 			fmt.Sprintf(
-				`UPDATE client_traffics SET up = %s, down = %s, last_online = %s WHERE email = ?`,
+				`UPDATE client_traffics SET up = %s, down = %s, raw_up = %s, raw_down = %s, last_online = %s WHERE email = ?`,
 				database.ClampedAddExpr("up"),
 				database.ClampedAddExpr("down"),
+				database.ClampedAddExpr("raw_up"),
+				database.ClampedAddExpr("raw_down"),
 				database.GreatestExpr("last_online", "?"),
 			),
-			t.Up, t.Down, now, ct.Email,
+			t.Up, t.Down, rawUp, rawDown, now, ct.Email,
 		).Error; err != nil {
 			logger.Warning("AddClientTraffic update data ", err)
 		}

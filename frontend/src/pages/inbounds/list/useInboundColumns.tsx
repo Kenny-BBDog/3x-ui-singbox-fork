@@ -30,6 +30,8 @@ import type { ClientCountEntry, DBInboundRecord, InboundSpeedEntry, RowAction } 
 interface UseInboundColumnsParams {
   hasAnyRemark: boolean;
   hasAnySubSortIndex: boolean;
+  /** Render the traffic-weight column only when some inbound is weighted. */
+  hasAnyTrafficMultiplier?: boolean;
   hasActiveNode: boolean;
   nodesById: Map<number, NodeRecord>;
   hostRemarksByInboundId: Map<number, string[]>;
@@ -45,6 +47,7 @@ interface UseInboundColumnsParams {
 export function useInboundColumns({
   hasAnyRemark,
   hasAnySubSortIndex,
+  hasAnyTrafficMultiplier = false,
   hasActiveNode,
   nodesById,
   hostRemarksByInboundId,
@@ -193,6 +196,28 @@ export function useInboundColumns({
         align: 'right',
         width: 90,
         sorter: (a, b) => (a.subSortIndex ?? 1) - (b.subSortIndex ?? 1),
+      });
+    }
+
+    if (hasAnyTrafficMultiplier) {
+      cols.push({
+        title: (
+          <Tooltip title={t('pages.inbounds.form.trafficMultiplierHelp')}>
+            {t('pages.inbounds.form.trafficMultiplier')}
+          </Tooltip>
+        ),
+        key: 'trafficMultiplier',
+        align: 'center',
+        width: 90,
+        sorter: (a, b) => (a.trafficMultiplier ?? 1) - (b.trafficMultiplier ?? 1),
+        render: (_, record) => {
+          const mult = record.trafficMultiplier ?? 1;
+          // 1 is the unweighted default; only flag the inbounds that cost more.
+          if (mult <= 1) {
+            return null;
+          }
+          return <Tag color="gold">{`x${mult}`}</Tag>;
+        },
       });
     }
 
@@ -469,6 +494,7 @@ export function useInboundColumns({
     t,
     hasAnyRemark,
     hasAnySubSortIndex,
+    hasAnyTrafficMultiplier,
     hasActiveNode,
     nodesById,
     hostRemarksByInboundId,

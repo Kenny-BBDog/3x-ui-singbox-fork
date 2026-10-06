@@ -55,6 +55,7 @@ export interface RawInboundRow {
   shareAddr?: string;
   subSortIndex?: number;
   excludeFromSub?: boolean;
+  trafficMultiplier?: number;
   disableFlow?: boolean;
   clientStats?: unknown;
 }
@@ -85,6 +86,7 @@ export interface WireInboundPayload {
   shareAddr: string;
   subSortIndex: number;
   excludeFromSub: boolean;
+  trafficMultiplier: number;
   disableFlow: boolean;
 }
 
@@ -222,6 +224,9 @@ export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
     shareAddr: row.shareAddr ?? '',
     subSortIndex: row.subSortIndex == null || row.subSortIndex === 0 ? 1 : row.subSortIndex,
     excludeFromSub: row.excludeFromSub ?? false,
+    // 0/absent means the pre-multiplier default of 1, never a zero weight.
+    trafficMultiplier:
+      row.trafficMultiplier == null || row.trafficMultiplier < 1 ? 1 : row.trafficMultiplier,
     disableFlow: row.disableFlow ?? false,
     protocol,
     settings,
@@ -404,6 +409,7 @@ export function formValuesToWirePayload(
     shareAddr: values.shareAddr,
     subSortIndex: values.subSortIndex,
     excludeFromSub: values.excludeFromSub,
+    trafficMultiplier: values.trafficMultiplier,
     disableFlow: values.disableFlow,
   };
   if (values.nodeId != null) payload.nodeId = values.nodeId;

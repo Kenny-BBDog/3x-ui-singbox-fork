@@ -140,6 +140,13 @@ export default function InboundList({
     [dbInbounds],
   );
 
+  // Only show the weight column once something is weighted, so a panel that
+  // bills everything 1:1 is not cluttered with a column of ones.
+  const hasAnyTrafficMultiplier = useMemo(
+    () => dbInbounds.some((i) => (i.trafficMultiplier ?? 1) > 1),
+    [dbInbounds],
+  );
+
   const toggleSelect = useCallback((id: number, checked: boolean) => {
     setSelectedRowKeys((prev) => {
       const next = new Set(prev);
@@ -169,6 +176,7 @@ export default function InboundList({
   const columns = useInboundColumns({
     hasAnyRemark,
     hasAnySubSortIndex,
+    hasAnyTrafficMultiplier,
     hasActiveNode,
     nodesById,
     hostRemarksByInboundId,
