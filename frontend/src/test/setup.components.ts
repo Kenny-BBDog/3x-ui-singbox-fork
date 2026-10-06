@@ -1,5 +1,5 @@
 import { afterEach, vi } from 'vitest';
-import { act, cleanup } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -70,21 +70,6 @@ if (!Range.prototype.getClientRects) {
   Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 }
 
-// This jsdom environment has no `setImmediate`, so React's scheduler falls back
-// to a MessageChannel port callback to dispatch its work. That is a macrotask no
-// `setTimeout` can flush, and if it is still queued at teardown it runs with
-// `window` gone and throws "window is not defined" — an unhandled error that
-// fails the run even though every assertion passed.
-//
-// Supplying `setImmediate` puts the scheduler back on a channel a drain (and
-// `act`) can reach. Defined before React is imported, because the scheduler
-// chooses its channel once, at load.
-if (typeof (globalThis as { setImmediate?: unknown }).setImmediate === 'undefined') {
-  (globalThis as unknown as { setImmediate: (cb: () => void) => unknown }).setImmediate = (
-    cb: () => void,
-  ) => setTimeout(cb, 0);
-}
-
 if (!i18next.isInitialized) {
   void i18next.use(initReactI18next).init({
     lng: 'en-US',
@@ -95,33 +80,41 @@ if (!i18next.isInitialized) {
   });
 }
 
+// Drain the event-loop phases React's work can be queued on.
+//
+// React 19 dispatches its scheduled work from a check-phase callback
+// (`setImmediate`; the CI stack shows `processImmediate node:internal/timers`),
+// and that callback reads `window.event`. If it is still pending when vitest
+// tears the jsdom environment down it throws "window is not defined" — no
+// assertion fails, but vitest counts an unhandled error and the run exits
+// non-zero.
+//
+// Draining only the timers phase (the previous `setTimeout` loop) cannot flush a
+// check-phase callback, and an `act` flush only pumps React's own act queue and
+// microtasks — neither reaches the phase React actually uses. Alternating both
+// phases is what makes the flush complete: Node runs check-phase callbacks
+// FIFO, so awaiting `setImmediate` runs the pending one, and awaiting
+// `setTimeout` clears anything that queued a timer in turn.
+async function drainEventLoopPhases(): Promise<void> {
+  const immediate =
+    typeof (globalThis as { setImmediate?: unknown }).setImmediate === 'function'
+      ? (cb: () => void) => setImmediate(cb)
+      : (cb: () => void) => setTimeout(cb, 0);
+  for (let i = 0; i < 3; i += 1) {
+    await new Promise<void>((resolve) => immediate(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 afterEach(async () => {
-  /*
-   * Flush React's pending work BEFORE unmounting, then unmount.
-   *
-   * React 19 dispatches its work from a scheduler task whose callback reads
-   * `window.event`. If work is still queued when vitest tears the jsdom
-   * environment down, that callback runs with `window` gone and throws
-   * "window is not defined". No assertion fails, but vitest counts it as an
-   * unhandled error and the whole run exits non-zero — which is how this failed
-   * repeatedly on CI while passing locally (CodeMirror and AntD schedule
-   * follow-up layout work, so the queue depth depends on the test).
-   *
-   * Why a plain timeout drain was not enough: React's scheduler picks its
-   * dispatch channel at load time. It prefers `setImmediate`, and falls back to
-   * a `MessageChannel` port callback when `setImmediate` is absent — which is
-   * the case in this jsdom environment. A MessageChannel callback is a
-   * macrotask that `setTimeout` never flushes, so draining timers (the previous
-   * fixed three-tick loop, and an `act` flush) could still leave work pending.
-   * Measured: deleting `setImmediate` in this environment turns a clean run into
-   * 155 unhandled errors, which is the same class of failure.
-   *
-   * `setImmediateShim` above makes the scheduler use a channel a drain can
-   * reach, and `act` then waits for React's real queue instead of guessing.
-   */
-  await act(async () => {});
+  // Before unmounting: flush work the test itself left queued.
+  await drainEventLoopPhases();
   cleanup();
   document.body.innerHTML = '';
+  // After unmounting: unmounting is what schedules React's passive-effect flush,
+  // so the queue is populated here, not before. This is the half the previous
+  // ordering missed.
+  await drainEventLoopPhases();
 });
 
 import { HttpUtil, Msg } from '@/utils';
