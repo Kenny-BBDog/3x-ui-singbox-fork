@@ -825,7 +825,9 @@ func wireInbound(ib *model.Inbound, remoteNodeID int) url.Values {
 		if mult < 1 {
 			mult = 1
 		}
-		v.Set("trafficMultiplier", strconv.Itoa(mult))
+		// Full precision on purpose: 1.5 must not arrive as 1 on the host that
+		// meters the bytes.
+		v.Set("trafficMultiplier", strconv.FormatFloat(mult, 'f', -1, 64))
 	}
 	v.Set("enable", strconv.FormatBool(ib.Enable))
 	v.Set("expiryTime", strconv.FormatInt(ib.ExpiryTime, 10))

@@ -153,9 +153,10 @@ the accumulating path.
 ## Goal
 
 - An inbound carries a traffic multiplier; a residential or CN2GIA inbound can be
-  2×, the cheap 4837 lines 1×.
+  weighted above 1 (1.5× for CN2GIA, 2× for residential), the cheap 4837 lines 1×.
 - Quota enforcement uses weighted bytes, so 2× traffic depletes a quota twice as
-  fast. A 100 GB customer who only uses a 2× node can move 50 GB.
+  fast. A 100 GB customer who only uses a 2× node can move 50 GB. The same holds
+  for a fractional weight: at 1.5× a 100 GB plan buys about 66 GB of bytes.
 - The pool stays **single and cross-node**: a customer who splits usage between
   the main line and residential nodes has one weighted total, which the existing
   summing path already delivers.
@@ -189,15 +190,22 @@ the accumulating path.
 Add to the inbound:
 
 ```
-traffic_multiplier  INTEGER NOT NULL DEFAULT 1
+traffic_multiplier  REAL NOT NULL DEFAULT 1
 ```
 
-Rationale, and the resolved decision on rounding: **integers only**. A weight of
-`2` means "every byte through this inbound counts twice". A fractional weight
-(`1.5`) would make every byte inexact and the display awkward, and there is no
-requirement that needs it — route pricing can be expressed with whole-number
-weights or by how much quota a plan includes. The column is an integer so the
-billing path never carries float drift.
+The weight may be fractional, because route costs are not all whole multiples:
+CN2GIA is priced at 1.5× and residential at 2×. The first release declared this
+column `INTEGER` and this spec originally required whole numbers; that is revised
+here (decision 3 below), and the column is widened by an explicit migration.
+
+Rounding, and why a fraction is safe: the weight is applied to **each metering
+delta**, and the product is rounded to a whole byte before it is added to the
+accumulated total. The stored total therefore stays a whole number of bytes, which
+is what quota enforcement compares against, and the error cannot compound — it is
+bounded by one byte per delta, in the customer's disfavour for a half byte and
+never in ours (rounding is half away from zero, and the operands are
+non-negative). Rounding the weight into the accumulated total instead would let
+the error grow without bound, which is the failure this avoids.
 
 The multiplier belongs to the **inbound**, not the client, because it is a
 property of the route (that line costs more), not of the customer. This also means
@@ -336,20 +344,39 @@ inventing a new handshake.
 
 Additive and reversible.
 
-1. `inbounds.traffic_multiplier INTEGER NOT NULL DEFAULT 1`.
+1. `inbounds.traffic_multiplier REAL NOT NULL DEFAULT 1`. Shipped first as
+   `INTEGER`, so on an existing database this is an explicit widening
+   (`migrateInboundTrafficMultiplierWiden`), not left to `AutoMigrate`. Every
+   stored value is a whole number and means the same thing as a real, so no value
+   conversion is needed and no total moves. Verified on a copy of both production
+   databases: the column becomes `REAL`, every row survives, `sum(up+down)` is
+   unchanged, and a second startup does nothing.
 2. `client_traffics.raw_up`, `client_traffics.raw_down` `INTEGER NOT NULL
    DEFAULT 0`, backfilled from the current `up`/`down`.
 3. Existing accumulated totals are **not** rewritten.
-4. Setting a multiplier > 1 takes effect for subsequent bytes only.
+4. Setting a multiplier above 1 takes effect for subsequent bytes only.
 
 Rollback: set the multiplier back to 1 (immediate, no restart), or revert the
-binary. The new columns are additive, so an older binary ignores them.
+binary. The widened column is additive in effect, so an older binary reads its
+whole numbers unchanged.
 
 ## Verification
 
 - **Isolated accounting test** (the lab of Findings 1–2, as a Go test): two inbounds,
   one client, one at 2×; assert the weighted total equals `raw₁ + 2·raw₂`, and that
   the raw columns equal `raw₁ + raw₂`.
+- **Fractional weight** (`TestWeightTraffic_FractionalWeightRoundsPerDelta`): at
+  1.5×, `WeightTraffic(1, 1.5) = 2` and `WeightTraffic(2, 1.5) = 3`, so the stored
+  total never carries a half byte; a run of deltas stays within one byte per delta
+  of the exact product rather than drifting; a weight below 1 and a NaN both fall
+  back to 1:1 rather than discounting; a negative delta (a counter reset) yields 0.
+- **A fractional weight survives a save** (`TestUpdateInbound_PersistsTrafficMultiplier`
+  uses 2.5), and is stored and read back as `REAL`.
+- **The schema change is safe on real data**
+  (`TestMigrateTrafficMultiplierWiden_RealDatabase`, opt-in via `XUI_REAL_DB`, run
+  against a copy of both production databases): `traffic_multiplier` becomes
+  `REAL`, the row counts are unchanged, `sum(up+down)` is unchanged, and a second
+  startup changes nothing.
 - **Weighted exactly once across hosts**: a unit test over the accumulation path
   asserting a node's weighted delta is added, not re-weighted, when the master
   merges it. This is the property the design protects, so it gets its own test.
@@ -400,7 +427,7 @@ Resolved before implementation, replacing the earlier open questions.
 | --- | --- | --- |
 | 1 | Label format for `(inbound, client)` | `{inbound-tag}\|{email}`, parsed on the first `\|`. Never contains `>>>`; deterministic so a re-render does not reset a baseline. |
 | 2 | Where raw bytes live | New `raw_up` / `raw_down` columns on `client_traffics`. Weighted values stay in `up`/`down`, so no existing reader changes. A per-inbound table is deferred with the per-node report. |
-| 3 | Rounding | Integer only. No fractional weight; the billing path never carries float drift. |
+| 3 | Rounding | Fractional weights are allowed, because route costs are not all whole multiples (CN2GIA 1.5×, residential 2×). The weight is applied per metering delta and the product rounded to a whole byte, so the stored total stays whole and the error is bounded by one byte per delta instead of compounding. Revised from an earlier "integers only"; the column is widened `INTEGER` → `REAL` by an explicit migration. |
 | 4 | How the multiplier reaches the metering host | Extend the existing inbound push payload (`wireInbound` gains `trafficMultiplier`), delivered by the existing `config_dirty` reconcile. Reuse `justPushed` as the in-flight guard rather than adding a handshake. |
 | 5 | Cross-host usage reconciliation | Already implemented (Finding 4): `NodeClientTraffic` + additive `SetRemoteTraffic` merge into one row. This spec feeds weighted deltas into it and changes nothing about the mechanism. |
 

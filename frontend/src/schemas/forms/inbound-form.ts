@@ -82,9 +82,10 @@ export const InboundDbFieldsSchema = z.object({
   shareAddr: z.string().default(''),
   subSortIndex: z.number().int().default(1),
   excludeFromSub: z.boolean().default(false),
-  // How fast this inbound consumes a quota. Integer only: a fractional weight
-  // would make every byte inexact. Floor of 1 — 1 means 1:1.
-  trafficMultiplier: z.number().int().min(1).max(1000).default(1),
+  // How fast this inbound consumes a quota. A fraction is allowed because route
+  // costs are not all whole multiples: 1.5 means every byte spends one and a half
+  // bytes of quota. Floor of 1 — 1 means 1:1.
+  trafficMultiplier: z.number().min(1).max(1000).default(1),
   disableFlow: z.boolean().default(false),
 });
 export type InboundDbFields = z.infer<typeof InboundDbFieldsSchema>;

@@ -725,7 +725,7 @@ export default function InboundFormModal({
         )}
         rules={{ validate: rhfZodValidate(InboundDbFieldsSchema.shape.trafficMultiplier) }}
       >
-        <InputNumber min={1} max={1000} />
+        <InputNumber min={1} max={1000} step={0.1} />
       </FormField>
 
       {protocol === Protocols.VLESS && (
