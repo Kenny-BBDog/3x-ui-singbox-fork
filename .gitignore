@@ -43,3 +43,8 @@ docker-compose.override.yml
 
 # Ignore .env (Environment Variables) file
 .env
+
+# Ignore the deployment target configuration: real host addresses, panel paths
+# and SSH key paths live here and must not be committed. The template
+# (deploy/hosts.env.example) is committed instead. See deploy/PRODUCTION.md.
+deploy/hosts.env

@@ -4,7 +4,7 @@ Tooling to ship the 3x-ui panel via unattended install, with **per-instance
 credentials generated on first boot** (never `admin/admin`, never a shared
 session secret). Works on amd64 and arm64.
 
-> Deploying **our** two production hosts (DMIT + LA) is covered separately in
+> Deploying **our** two production hosts is covered separately in
 > [`PRODUCTION.md`](PRODUCTION.md) — that path takes a CI-built release artifact
 > rather than running `install.sh`.
 

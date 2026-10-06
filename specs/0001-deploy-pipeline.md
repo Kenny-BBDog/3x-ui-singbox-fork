@@ -22,9 +22,10 @@ Four problems follow.
    process of both `xray` and `sing-box`, so restarting it disconnects every
    client for a few seconds. There is no verification that service came back.
 4. **The build environment is a hand-managed dependency.** Building on the host
-   needs a Go toolchain and a C compiler there. DMIT runs Debian 12 (glibc 2.36)
-   and LA runs Ubuntu 24.04 (glibc 2.39), so a dynamically linked binary built on
-   a newer glibc will not start on the older host. Nothing enforces this.
+   needs a Go toolchain and a C compiler there. The two hosts run different
+   distributions with different glibc versions, so a dynamically linked binary
+   built against the newer one will not start on the older one. Nothing enforces
+   this.
 
 ## Goal
 
@@ -66,7 +67,7 @@ the glibc version from the equation entirely.
 
 `deploy/deploy.sh`, run from the operator's machine with Git Bash.
 
-Inputs: the release tag (default `dev-latest`), and `--hosts dmit|la|both`
+Inputs: the release tag (default `dev-latest`), and `--hosts primary|secondary|both`
 (default `both`).
 
 Per host:
@@ -106,7 +107,7 @@ from `strings` over the binary on the host, not from an HTTP response.
 passes, and the browser then fails to parse an HTML document as an ES module —
 the blank page again, with a green gate. Requiring the MIME type closes that gap.
 
-Measured against the two binaries present on DMIT:
+Measured against the two binaries present on a production host:
 
 | Binary | Assets embedded | Check 3 on the referenced set |
 | --- | --- | --- |
@@ -127,11 +128,13 @@ Hosts differ, so the gate is parameterised:
 
 | Host | Base URL (from the host) | Probe transport |
 | --- | --- | --- |
-| DMIT | `https://vpn.flintic.uk/vpn-admin/` | TLS, `--resolve` to loopback |
-| LA | `http://127.0.0.1:25073/Cul7KGMTQ8sEpXsfsN/` | plain HTTP on loopback |
+| Primary | its public panel URL | TLS through a reverse proxy, `--resolve` to loopback |
+| Secondary | a loopback URL with the panel's port and base path | plain HTTP on loopback |
 
-LA's panel is plain HTTP on 25073 rather than TLS behind nginx, so the probe is
-per-host rather than shared.
+The two panels are exposed differently (one behind a TLS reverse proxy, one plain
+HTTP on a loopback port under a random base path), so the probe is per-host
+rather than shared. Both the address and the path come from `deploy/hosts.env`,
+which is gitignored.
 
 ### Known-answer check
 
@@ -148,9 +151,9 @@ The check distinguishes all three, so a missing or mis-typed asset fails it.
 ### Configuration
 
 Host addresses, ports and base paths live in one place in the script. The SSH
-key for DMIT is the operator's existing key; LA is reached **through DMIT as a
-jump host** (DMIT holds the key LA trusts), matching how this estate is already
-administered.
+key for the primary host is the operator's existing key; the secondary is reached
+**through the primary as a jump host** (the primary holds the key the secondary
+trusts), matching how this estate is already administered.
 
 ## Verification
 
@@ -171,8 +174,9 @@ administered.
 ## Rollout
 
 Both hosts together, in the low-traffic window (after ~01:00 local), because the
-restart disconnects clients for a few seconds. DMIT first, then LA: DMIT is the
-master panel, so a failure there is discovered before LA is touched.
+restart disconnects clients for a few seconds. Primary first, then secondary: the
+primary serves the customer-facing entry point, so a failure there is discovered
+before the secondary is touched.
 
 Rollback is automatic on health-gate failure. Manual rollback is
 `/root/x-ui.bin.pre-deploy-<UTC>` moved back into place and the service restarted.

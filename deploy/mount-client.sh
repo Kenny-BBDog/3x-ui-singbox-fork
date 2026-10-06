@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# mount-client.sh — 给一个客户追加/更新到全部（或挑选的）anytls 入站
-# 用法（DMIT 上, root）:
-#   ./mount-client.sh add    <email> <subId> [totalGB] [tag1 tag2 ...]   # 挂到指定入站（缺省=全部12个）
-#   ./mount-client.sh set    <email> <subId> tag1 tag2 ...               # 挂载改为恰好这些入站
-#   ./mount-client.sh unlink <email> [tag ...]                            # 从某些/全部入站摘除
-# tag 用入站 tag: inbound-dmit-anytls / inbound-la-anytls / res-30001..30010
-# 例:
-#   ./mount-client.sh add liu xks83ndq 214748364800 inbound-la-anytls res-30009
-#   ./mount-client.sh set  liu xks83ndq inbound-la-anytls res-30009
+# mount-client.sh — attach or update a client on all (or selected) anytls inbounds
+# Usage (on the panel host, as root):
+#   ./mount-client.sh add    <email> <subId> [totalGB] [tag1 tag2 ...]   # attach to the given inbounds (default: all)
+#   ./mount-client.sh set    <email> <subId> tag1 tag2 ...               # replace the mount set with exactly these
+#   ./mount-client.sh unlink <email> [tag ...]                           # detach from some or all inbounds
+# tag values come from the inbounds table, for example inbound-main-anytls,
+# inbound-alt-anytls, res-30001..30010
+# Examples:
+#   ./mount-client.sh add customer@example.com abc123 214748364800 inbound-alt-anytls res-30009
+#   ./mount-client.sh set  customer@example.com abc123 inbound-alt-anytls res-30009
 set -euo pipefail
 
 DB=/etc/x-ui/x-ui.db
@@ -38,7 +39,7 @@ if cmd == 'add':
         db.commit()
     cid = cur.execute('SELECT id FROM clients WHERE email=?', (email,)).fetchone()[0]
 
-ALL_TAGS = ['inbound-dmit-anytls', 'inbound-la-anytls'] + ['res-300%02d' % i for i in range(1, 11)]
+ALL_TAGS = ['inbound-main-anytls', 'inbound-alt-anytls'] + ['res-300%02d' % i for i in range(1, 11)]
 want = rest if rest else ALL_TAGS
 if cmd == 'add':
     for tag in want:
@@ -122,7 +123,7 @@ PYEOF
 
 echo "restarting panels..."
 systemctl restart x-ui >/dev/null 2>&1
-ssh -i /root/.ssh/sub2api_migration_ed25519 -o StrictHostKeyChecking=no root@156.225.88.212 \
+ssh -i $SECONDARY_JUMP_KEY -o StrictHostKeyChecking=no root@SECONDARY_HOST \
     "systemctl restart x-ui >/dev/null 2>&1" || true
 sleep 12
-echo "verify: curl -sk -A 'Shadowrocket/2230' https://vpn.flintic.uk/p/$SUBID"
+echo "verify: curl -sk -A 'Shadowrocket/2230' https://panel.example.com/p/$SUBID"

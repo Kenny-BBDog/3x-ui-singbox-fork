@@ -62,7 +62,7 @@ func renderTwoInbounds(t *testing.T, tagA, tagB string) (labels []string, passwo
 // inbounds is what makes traffic unattributable to a route, which is the whole
 // reason the multiplier cannot be applied (spec 0002, Finding 1).
 func TestMeterLabelIsPerInbound(t *testing.T) {
-	labels, _, statsUsers := renderTwoInbounds(t, "inbound-dmit-anytls", "res-30001")
+	labels, _, statsUsers := renderTwoInbounds(t, "inbound-main-anytls", "res-30001")
 
 	if len(labels) != 2 {
 		t.Fatalf("want 2 user entries (one per inbound), got %d: %v", len(labels), labels)
@@ -70,7 +70,7 @@ func TestMeterLabelIsPerInbound(t *testing.T) {
 	if labels[0] == labels[1] {
 		t.Fatalf("labels collide across inbounds: %q", labels[0])
 	}
-	for _, want := range []string{"inbound-dmit-anytls|cust", "res-30001|cust"} {
+	for _, want := range []string{"inbound-main-anytls|cust", "res-30001|cust"} {
 		if !contains(labels, want) {
 			t.Errorf("missing label %q in %v", want, labels)
 		}
@@ -90,7 +90,7 @@ func TestMeterLabelIsPerInbound(t *testing.T) {
 // the same on every inbound, so a client's subscription and login are not
 // affected by this change (spec 0002, Finding 2).
 func TestMeterLabelDoesNotChangeCredential(t *testing.T) {
-	labels, passwords, _ := renderTwoInbounds(t, "inbound-dmit-anytls", "res-30001")
+	labels, passwords, _ := renderTwoInbounds(t, "inbound-main-anytls", "res-30001")
 
 	for _, l := range labels {
 		if pw := passwords[l]; pw != "one-shared-password" {

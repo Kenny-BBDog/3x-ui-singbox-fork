@@ -21,7 +21,7 @@ Note: upstream's default branch is `main`; ours is `master`. Workflow triggers i
 
 | Branch | Role |
 | --- | --- |
-| `master` | Production. What the DMIT and LA panels are built from. Only accepts merges from a reviewed task branch or a `hotfix/*`. |
+| `master` | Production. What the deployed panels are built from. Only accepts merges from a reviewed task branch or a `hotfix/*`. |
 | `feature/*` | New capability. One task per branch, short-lived. |
 | `fix/*` | Non-urgent defect fix. |
 | `hotfix/*` | Production is broken right now. Branch from `master`, smallest possible change. |

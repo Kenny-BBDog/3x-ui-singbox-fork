@@ -13,7 +13,8 @@ import (
 //
 // Credentials live in Clients here — NOT in the shared clients table — because
 // one customer legitimately holds a different sing-box password per machine
-// (DMIT-AnyTLS vs LA-AnyTLS). The shared row carries identity, quota and
+// (main-line AnyTLS vs residential AnyTLS). The shared row carries identity,
+// quota and
 // expiry; the inbound row carries the credential for the machine it runs on.
 // Node sync already ships this JSON verbatim, so a master-managed inbound
 // arrives at its node with the correct per-machine passwords intact.

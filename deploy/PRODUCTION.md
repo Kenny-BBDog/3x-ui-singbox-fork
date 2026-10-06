@@ -1,6 +1,6 @@
 # Deploying our production panel
 
-This file covers **our** two hosts (DMIT master + LA node). For the upstream
+This file covers **our** two hosts (a primary panel and a secondary node). For the upstream
 cloud-init / marketplace tooling, see [`README.md`](README.md) in this directory.
 
 `deploy.sh` ships the panel binary to both hosts. Run it from the operator's
@@ -11,7 +11,7 @@ machine with Git Bash, not from a host.
 ./deploy/deploy.sh --dry-run         # download, verify, stage; no swap
 ./deploy/deploy.sh                   # deploy dev-latest to both hosts
 ./deploy/deploy.sh --tag v3.8.6      # a specific release
-./deploy/deploy.sh --hosts dmit      # one host
+./deploy/deploy.sh --hosts primary   # one host
 ```
 
 Implements [`specs/0001-deploy-pipeline.md`](../specs/0001-deploy-pipeline.md).
@@ -23,8 +23,9 @@ Nothing is built on the hosts, and nothing is built locally. CI builds it:
 with the Bootlin cross-toolchain and publishes it to the rolling `dev-latest`
 pre-release, force-moved to each `master` commit.
 
-Static musl linking is what makes one artifact valid on both hosts — DMIT is
-Debian 12 (glibc 2.36) and LA is Ubuntu 24.04 (glibc 2.39). A dynamically linked
+Static musl linking is what makes one artifact valid on both hosts — they run
+different distributions with different glibc versions (Debian 12 is 2.36,
+Ubuntu 24.04 is 2.39). A dynamically linked
 build produced against a newer glibc will not start on the older host. This is
 why the artifact is taken from CI rather than compiled on a host.
 
@@ -72,25 +73,46 @@ This is the failure the gate exists for: on 2026-10-05 the panel served its logi
 page and then rendered blank, with the console showing a 404 on a referenced
 asset.
 
-## Hosts
+## Configuration
 
-| Host | Address | Panel | Reached by |
-| --- | --- | --- | --- |
-| DMIT (master) | `179.255.106.182` | `https://vpn.flintic.uk/vpn-admin/` (2053 behind nginx) | SSH key at `~/.ssh/vps_clean.pem` |
-| LA (node) | `156.225.88.212` | `http://127.0.0.1:25073/Cul7KGMTQ8sEpXsfsN/` | Through DMIT as a jump host |
+Host addresses, panel paths and key paths are **not in this repository** — it is
+public, and those values describe live infrastructure. They live in
+`deploy/hosts.env`, which is gitignored:
 
-LA is reached through DMIT because DMIT holds the key LA trusts; this matches how
-the estate is already administered. No GitHub secret holds any server key — that
-is why deploy is a local script rather than a workflow.
+```bash
+cp deploy/hosts.env.example deploy/hosts.env
+$EDITOR deploy/hosts.env
+```
+
+`hosts.env` defines the two targets:
+
+| Variable group | Meaning |
+| --- | --- |
+| `PRIMARY_HOST`, `PRIMARY_SSH_KEY`, `PRIMARY_BASE`, `PRIMARY_ORIGIN`, `PRIMARY_ASSET_DIR` | The primary panel (the one that serves the customer-facing subscription entry point) |
+| `SECONDARY_HOST`, `SECONDARY_JUMP_KEY`, `SECONDARY_BASE`, `SECONDARY_ORIGIN`, `SECONDARY_ASSET_DIR` | The secondary panel, reached **through the primary as a jump host** because the primary holds the key the secondary trusts |
+| `DEPLOY_ORDER` | Which order `--hosts both` uses; primary first, so a failure there is found before the secondary is touched |
+
+`PRIMARY_CURL_EXTRA` (optional) carries any extra `curl` arguments needed to
+reach the primary's panel URL from the host itself, for example a `--resolve`
+when the panel is served behind a reverse proxy.
+
+The two hosts differ in how their panels are exposed, which is why the health
+gate takes both a base URL and an origin per host rather than sharing one.
+
+No GitHub secret holds any server key — that is why deploy is a local script
+rather than a workflow.
 
 ## When to run it
 
 Restarting `x-ui` restarts `xray` and `sing-box` (it is their parent process), so
 every client connection drops for a few seconds. **Deploy in the low-traffic
-window, after ~01:00 local.** Check the load first:
+window.** Check the current load first, substituting your own values from
+`hosts.env`:
 
 ```bash
-ssh -i ~/.ssh/vps_clean.pem root@179.255.106.182 \
+# shellcheck disable=SC1091
+source deploy/hosts.env
+ssh -i "$PRIMARY_SSH_KEY" "root@$PRIMARY_HOST" \
   "ss -tn state established '( sport = :8445 )' | wc -l"
 ```
 
@@ -110,4 +132,6 @@ systemctl start x-ui
 - Git Bash (the script is bash; it is not a PowerShell script).
 - `gh` CLI, authenticated — it fetches the release artifact.
 - `ssh`, `scp`, `tar`, `curl`, `sha256sum` (Git Bash provides all of these).
-- The SSH key for DMIT. Override with `--key` or `$SSH_KEY`.
+- `deploy/hosts.env`, filled in from the template.
+- The SSH key named by `PRIMARY_SSH_KEY`. Override per run with `--key` or `$SSH_KEY`.
+

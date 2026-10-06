@@ -7,7 +7,7 @@
 #
 #   ./deploy/deploy.sh                 # current dev-latest, both hosts
 #   ./deploy/deploy.sh --tag v3.8.6    # a specific release tag
-#   ./deploy/deploy.sh --hosts dmit    # one host
+#   ./deploy/deploy.sh --hosts primary    # one host
 #   ./deploy/deploy.sh --dry-run       # download, verify, stage; no swap
 #   ./deploy/deploy.sh --health-only   # just check the hosts now
 #
@@ -28,25 +28,40 @@ ARTIFACT="x-ui-linux-amd64.tar.gz"
 REMOTE_BIN="/usr/local/x-ui/x-ui"
 SERVICE="x-ui"
 
-# DMIT is the master panel and the jump host for LA (DMIT holds the key LA
-# trusts), matching how this estate is already administered.
-DMIT_HOST="179.255.106.182"
-LA_HOST="156.225.88.212"
-LA_JUMP_KEY="/root/.ssh/sub2api_migration_ed25519"
+# ------------------------------------------------------------------- targets
+#
+# Host addresses, panel paths and key paths are NOT in this repository: it is
+# public, and those values describe live infrastructure. They are read from
+# deploy/hosts.env, which is gitignored. Copy hosts.env.example to hosts.env and
+# fill it in. See deploy/PRODUCTION.md.
+HOSTS_ENV="${HOSTS_ENV:-$(dirname "$0")/hosts.env}"
+if [[ ! -f "$HOSTS_ENV" ]]; then
+  printf 'ERROR: %s not found.\n\nCopy the template and fill in the real values:\n  cp "%s.example" "%s"\n' \
+    "$HOSTS_ENV" "$HOSTS_ENV" "$HOSTS_ENV" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$HOSTS_ENV"
 
-# Health-gate endpoints, probed from the host itself. LA's panel is plain HTTP on
-# 25073 under a random base path, not TLS behind nginx, so it is not shared.
-DMIT_BASE="https://vpn.flintic.uk/vpn-admin/"
-DMIT_ORIGIN="https://vpn.flintic.uk"
-DMIT_CURL_EXTRA="--resolve vpn.flintic.uk:443:127.0.0.1"
-LA_BASE="http://127.0.0.1:25073/Cul7KGMTQ8sEpXsfsN/"
-LA_ORIGIN="http://127.0.0.1:25073"
+# Required values, named so a missing one produces a useful message.
+: "${PRIMARY_HOST:?set PRIMARY_HOST in $HOSTS_ENV}"
+: "${PRIMARY_SSH_KEY:?set PRIMARY_SSH_KEY in $HOSTS_ENV}"
+: "${PRIMARY_BASE:?set PRIMARY_BASE in $HOSTS_ENV}"
+: "${PRIMARY_ORIGIN:?set PRIMARY_ORIGIN in $HOSTS_ENV}"
+: "${PRIMARY_ASSET_DIR:?set PRIMARY_ASSET_DIR in $HOSTS_ENV}"
+: "${SECONDARY_HOST:?set SECONDARY_HOST in $HOSTS_ENV}"
+: "${SECONDARY_JUMP_KEY:?set SECONDARY_JUMP_KEY in $HOSTS_ENV}"
+: "${SECONDARY_BASE:?set SECONDARY_BASE in $HOSTS_ENV}"
+: "${SECONDARY_ORIGIN:?set SECONDARY_ORIGIN in $HOSTS_ENV}"
+: "${SECONDARY_ASSET_DIR:?set SECONDARY_ASSET_DIR in $HOSTS_ENV}"
+PRIMARY_CURL_EXTRA="${PRIMARY_CURL_EXTRA:-}"
 
 TAG="dev-latest"
 HOSTS="both"
 DRY_RUN=0
 HEALTH_ONLY=0
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/vps_clean.pem}"
+# The key may be overridden per invocation; the configured value is the default.
+SSH_KEY="${SSH_KEY:-$PRIMARY_SSH_KEY}"
 
 # --------------------------------------------------------------------- output
 
@@ -69,14 +84,14 @@ Deploy the panel binary to the production hosts.
 
   ./deploy/deploy.sh                 current dev-latest, both hosts
   ./deploy/deploy.sh --tag v3.8.6    a specific release tag
-  ./deploy/deploy.sh --hosts dmit    one host
+  ./deploy/deploy.sh --hosts primary    one host
   ./deploy/deploy.sh --dry-run       download, verify, stage; no swap
   ./deploy/deploy.sh --health-only   just check the hosts now
 
 Options:
   --tag <tag>        Release tag to deploy (default: dev-latest)
-  --hosts <which>    dmit | la | both (default: both)
-  --key <path>       SSH private key for DMIT (default: ~/.ssh/vps_clean.pem)
+  --hosts <which>    primary | secondary | both (default: both)
+  --key <path>       SSH private key for the primary host (default: from hosts.env)
   --dry-run          Download, verify and stage; do not swap the binary
   --health-only      Run the health gate against the hosts as they are
   -h, --help         This text
@@ -99,10 +114,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$HOSTS" in
-  dmit) TARGETS=(dmit) ;;
-  la)   TARGETS=(la) ;;
-  both) TARGETS=(dmit la) ;;
-  *)    die "--hosts must be dmit, la or both (got '$HOSTS')" ;;
+  primary) TARGETS=(primary) ;;
+  secondary) TARGETS=(secondary) ;;
+  both) TARGETS=(primary secondary) ;;
+  *)    die "--hosts must be primary, secondary or both (got '$HOSTS')" ;;
 esac
 
 for tool in ssh scp tar curl sha256sum; do
@@ -112,23 +127,23 @@ done
 
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o BatchMode=yes
           -o ConnectTimeout=25 -o ServerAliveInterval=10)
-DMIT_SSH=(ssh "${SSH_OPTS[@]}" -i "$SSH_KEY" "root@$DMIT_HOST")
+PRIMARY_SSH=(ssh "${SSH_OPTS[@]}" -i "$SSH_KEY" "root@$PRIMARY_HOST")
 
-# Run a command on a host, whichever it is. LA is reached through DMIT.
+# Run a command on a host, whichever it is. The secondary host is reached
 # stdin is /dev/null: these run inside a `while read` loop in the health gate,
 # and an ssh that inherits stdin would swallow the loop's input.
 #
 # Note the two different argument styles. ssh joins its own arguments with
-# spaces, so for DMIT the words are passed through as-is. For LA the command is
+# spaces, so for the primary the words are passed through as-is. For the
 # embedded in a second shell command, so each word must be escaped to survive
-# that re-parse — escaping the DMIT case would turn the whole command into one
+# secondary the command is re-parsed, so escaping the primary case would turn
 # word (which ssh would then try to execute as a single program name).
 run_on() {
   local host="$1"; shift
   case "$host" in
-    dmit) "${DMIT_SSH[@]}" "$@" </dev/null ;;
-    la)   "${DMIT_SSH[@]}" \
-            "ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20 -i $LA_JUMP_KEY root@$LA_HOST $(printf '%q ' "$@")" </dev/null ;;
+    primary) "${PRIMARY_SSH[@]}" "$@" </dev/null ;;
+    secondary) "${PRIMARY_SSH[@]}" \
+            "ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20 -i $SECONDARY_JUMP_KEY root@$SECONDARY_HOST $(printf '%q ' "$@")" </dev/null ;;
   esac
 }
 
@@ -136,20 +151,20 @@ run_on() {
 put_to() {
   local host="$1" src="$2" dst="$3"
   case "$host" in
-    dmit) scp "${SSH_OPTS[@]}" -i "$SSH_KEY" "$src" "root@$DMIT_HOST:$dst" >/dev/null </dev/null ;;
-    la)   scp "${SSH_OPTS[@]}" -i "$SSH_KEY" "$src" "root@$DMIT_HOST:/tmp/deploy-hop" >/dev/null </dev/null
-          "${DMIT_SSH[@]}" \
-            "scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes -i $LA_JUMP_KEY /tmp/deploy-hop root@$LA_HOST:$dst && rm -f /tmp/deploy-hop" </dev/null >/dev/null ;;
+    primary) scp "${SSH_OPTS[@]}" -i "$SSH_KEY" "$src" "root@$PRIMARY_HOST:$dst" >/dev/null </dev/null ;;
+    secondary) scp "${SSH_OPTS[@]}" -i "$SSH_KEY" "$src" "root@$PRIMARY_HOST:/tmp/deploy-hop" >/dev/null </dev/null
+          "${PRIMARY_SSH[@]}" \
+            "scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes -i $SECONDARY_JUMP_KEY /tmp/deploy-hop root@$SECONDARY_HOST:$dst && rm -f /tmp/deploy-hop" </dev/null >/dev/null ;;
   esac
 }
 
-base_url()   { case "$1" in dmit) printf '%s' "$DMIT_BASE" ;; la) printf '%s' "$LA_BASE" ;; esac; }
-base_path()  { case "$1" in dmit) printf '%s' "vpn-admin/assets/" ;; la) printf '%s' "Cul7KGMTQ8sEpXsfsN/assets/" ;; esac; }
-# Assets in the embedded HTML are absolute paths (/vpn-admin/assets/… on DMIT,
-# /Cul7KGMTQ8sEpXsfsN/assets/… on LA), so they resolve against the origin, not
-# against the base path. Joining them onto the base path double-prefixes it.
-origin_url() { case "$1" in dmit) printf '%s' "$DMIT_ORIGIN" ;; la) printf '%s' "$LA_ORIGIN" ;; esac; }
-curl_extra() { case "$1" in dmit) printf '%s' "$DMIT_CURL_EXTRA" ;; la) printf '' ;; esac; }
+base_url()   { case "$1" in primary) printf '%s' "$PRIMARY_BASE" ;; secondary) printf '%s' "$SECONDARY_BASE" ;; esac; }
+base_path()  { case "$1" in primary) printf '%s' "$PRIMARY_ASSET_DIR" ;; secondary) printf '%s' "$SECONDARY_ASSET_DIR" ;; esac; }
+# Assets in the embedded HTML are absolute paths that already contain the panel
+# path, so they resolve against the origin rather than the base URL. Joining
+# them onto the base URL would double-prefix the path.
+origin_url() { case "$1" in primary) printf '%s' "$PRIMARY_ORIGIN" ;; secondary) printf '%s' "$SECONDARY_ORIGIN" ;; esac; }
+curl_extra() { case "$1" in primary) printf '%s' "$PRIMARY_CURL_EXTRA" ;; secondary) printf '' ;; esac; }
 
 # ----------------------------------------------------------------- health gate
 

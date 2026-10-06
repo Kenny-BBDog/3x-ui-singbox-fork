@@ -16,10 +16,10 @@ func TestRenderConfigResidentialChain(t *testing.T) {
 		Enable:   true,
 		Port:     30001,
 		Protocol: model.AnyTLS,
-		Settings: `{"sbOutbound":{"type":"socks","tag":"resout-30001","server":"isp.decodo.com","server_port":10001,"egressUser":"spc8vh23","egressPassword":"pw"},"alpn":["h2","http/1.1"],"certificate_path":"/cert.pem","key_path":"/key.pem","clients":[{"email":"cust","password":"atls-x","enable":true}]}`,
+		Settings: `{"sbOutbound":{"type":"socks","tag":"resout-30001","server":"proxy.example.net","server_port":10001,"egressUser":"egressuser","egressPassword":"pw"},"alpn":["h2","http/1.1"],"certificate_path":"/cert.pem","key_path":"/key.pem","clients":[{"email":"cust","password":"atls-x","enable":true}]}`,
 	}
 	plain := &model.Inbound{
-		Tag:      "inbound-dmit-anytls",
+		Tag:      "inbound-main-anytls",
 		Enable:   true,
 		Port:     8445,
 		Protocol: model.AnyTLS,
@@ -57,13 +57,13 @@ func TestRenderConfigResidentialChain(t *testing.T) {
 	for _, o := range cfg.Outbounds {
 		if o.Tag == "resout-30001" {
 			foundSocks = true
-			if o.Type != "socks" || o.Server != "isp.decodo.com" {
+			if o.Type != "socks" || o.Server != "proxy.example.net" {
 				t.Fatalf("socks outbound malformed: %+v", o)
 			}
 			if o.Version != "5" {
 				t.Fatalf("socks version must be 5, got %q", o.Version)
 			}
-			if o.Username != "spc8vh23" || o.Password == "" {
+			if o.Username != "egressuser" || o.Password == "" {
 				t.Fatalf("socks user must be lifted to top-level username/password: %+v", o)
 			}
 		}
