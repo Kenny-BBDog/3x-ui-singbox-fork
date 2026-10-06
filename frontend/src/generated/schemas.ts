@@ -3143,11 +3143,11 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "integer"
       },
       "trafficMultiplier": {
-        "description": "TrafficMultiplier weights every byte metered on this inbound when it is\ncharged against a client's quota, so a more expensive route (residential,\nCN2GIA) can consume a quota faster than a cheap high-volume line. 1 means\n1:1. Integer only: a fractional weight would make every byte inexact for no\nproduct need. Only meaningful for a local inbound — a mirror row carries the\nvalue so the UI can show it, and the node that meters the traffic applies it.",
+        "description": "TrafficMultiplier weights every byte metered on this inbound when it is\ncharged against a client's quota, so a more expensive route (residential,\nCN2GIA) can consume a quota faster than a cheap high-volume line. 1 means\n1:1; 1.5 means a byte on this route spends one and a half bytes of quota.\nA fractional weight is allowed because route costs are not all whole\nmultiples. The weight is applied to each metering delta and the result is\nrounded to a whole byte, so the accumulated total never drifts.\nOnly meaningful for a local inbound — a mirror row carries the value so the\nUI can show it, and the node that meters the traffic applies it.",
         "example": 1,
         "maximum": 1000,
         "minimum": 1,
-        "type": "integer"
+        "type": "number"
       },
       "trafficReset": {
         "description": "Traffic reset schedule",

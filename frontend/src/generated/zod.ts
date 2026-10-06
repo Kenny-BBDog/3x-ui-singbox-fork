@@ -769,7 +769,7 @@ export const InboundSchema = z.object({
   subSortIndex: z.number().int(),
   tag: z.string(),
   total: z.number().int(),
-  trafficMultiplier: z.number().int().min(1).max(1000),
+  trafficMultiplier: z.number().min(1).max(1000),
   trafficReset: z.enum(['never', 'hourly', 'daily', 'weekly', 'monthly']),
   trafficResetDay: z.number().int().min(1).max(31),
   up: z.number().int(),

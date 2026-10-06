@@ -696,7 +696,7 @@
         },
         "autoFill": "Preenchimento automático",
         "trafficMultiplier": "Traffic multiplier",
-        "trafficMultiplierHelp": "How fast a byte on this inbound counts against a client's quota. 1 means 1:1; 2 means every byte counts twice, so a customer who only uses this route can spend half as much data. Set this to reflect the route's cost (for example 2 for a residential or CN2GIA line) rather than a plan's size. Whole numbers only. Takes effect for new traffic after the node receives it; usage already counted is not re-charged."
+        "trafficMultiplierHelp": "How fast a byte on this inbound counts against a client's quota. 1 means 1:1; 1.5 means every byte spends one and a half bytes, so a customer who only uses this route can spend two thirds as much data. Set this to reflect the route's cost (for example 1.5 for a CN2GIA line and 2 for a residential IP) rather than a plan's size. Decimals are allowed. Takes effect for new traffic after the node receives it; usage already counted is not re-charged."
       },
       "info": {
         "mode": "Modo",

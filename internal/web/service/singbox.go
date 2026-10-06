@@ -204,7 +204,7 @@ func (s *SingboxService) PollTraffic() error {
 	// back apart, so an unusual tag or email cannot misattribute traffic.
 	type meter struct {
 		inboundId  int
-		multiplier int
+		multiplier float64
 	}
 	users := make(map[string]meter)
 	emailOf := make(map[string]string)
@@ -283,8 +283,8 @@ func (s *SingboxService) PollTraffic() error {
 		}
 		acc.rawUp += dUp
 		acc.rawDown += dDown
-		acc.up += dUp * int64(m.multiplier)
-		acc.down += dDown * int64(m.multiplier)
+		acc.up += WeightTraffic(dUp, m.multiplier)
+		acc.down += WeightTraffic(dDown, m.multiplier)
 	}
 	if len(order) == 0 {
 		return nil

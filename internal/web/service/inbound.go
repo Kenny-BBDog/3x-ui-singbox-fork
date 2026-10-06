@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"regexp"
 	"slices"
@@ -45,14 +46,36 @@ func normalizeTrafficResetDay(day int) int {
 	return min(day, 31)
 }
 
-// normalizeTrafficMultiplier clamps a submitted per-inbound weight to a whole
-// number at least 1. Absent or zero means 1: an unweighted route, because the
-// column is NOT NULL DEFAULT 1 and gin binds an omitted int as 0.
-func normalizeTrafficMultiplier(mult int) int {
-	if mult < 1 {
+// normalizeTrafficMultiplier clamps a submitted per-inbound weight to at least 1.
+// Absent or zero means 1: an unweighted route, because the column defaults to 1
+// and gin binds an omitted number as 0. A fractional weight above 1 is allowed
+// (route costs are not all whole multiples), and NaN is rejected to 1 so a bad
+// payload cannot poison every later multiplication.
+func normalizeTrafficMultiplier(mult float64) float64 {
+	if !(mult >= 1) { // written this way so NaN also lands here
 		return 1
 	}
 	return mult
+}
+
+// WeightTraffic converts a raw metered delta into the quota it consumes. The
+// weight is applied to each delta and rounded to a whole byte rather than to the
+// running total, so a fractional weight stays exact over time: 1.5 x 1 byte
+// rounds to 2 and 1.5 x 2 rounds to 3, so two one-byte deltas charge 5 where one
+// two-byte delta charges 3. The two orders differ by at most one byte per pair,
+// which is the price of never storing a half byte in a column that quota
+// enforcement compares against a whole-byte total.
+//
+// math.Round rounds half away from zero and both operands are non-negative here,
+// so a half byte always rounds up and the result never drifts downward.
+func WeightTraffic(delta int64, multiplier float64) int64 {
+	if delta <= 0 {
+		return 0
+	}
+	if !(multiplier > 1) { // also catches NaN, so a bad weight charges 1:1
+		return delta
+	}
+	return int64(math.Round(float64(delta) * multiplier))
 }
 
 func normalizeInboundShareAddrStrategy(strategy string) string {

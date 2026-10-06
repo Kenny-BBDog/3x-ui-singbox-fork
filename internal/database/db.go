@@ -154,6 +154,41 @@ func migrateInboundTrafficMultiplierColumn() error {
 	return migrator.AddColumn(&model.Inbound{}, "TrafficMultiplier")
 }
 
+// migrateInboundTrafficMultiplierWiden upgrades traffic_multiplier from the
+// INTEGER the first release used to the REAL needed for a fractional weight
+// (1.5x on a CN2GIA or residential route). Existing values are whole numbers and
+// mean the same thing either way, so no value conversion is needed and no total
+// moves.
+//
+// Not left to AutoMigrate: a real schema change is the operation that can rebuild
+// a table, and this column sits on the live production database. Doing the one
+// known-safe change explicitly, under a declared type check, keeps AutoMigrate's
+// reach out of it. New installs declare REAL on the model, so they are already
+// correct and this is a no-op for them.
+func migrateInboundTrafficMultiplierWiden() error {
+	migrator := db.Migrator()
+	if !migrator.HasTable(&model.Inbound{}) || !migrator.HasColumn(&model.Inbound{}, "traffic_multiplier") {
+		return nil
+	}
+	// The declared type of the column as it physically exists now.
+	colType, err := migrator.ColumnTypes(&model.Inbound{})
+	if err != nil {
+		return err
+	}
+	for _, ct := range colType {
+		if ct.Name() != "traffic_multiplier" {
+			continue
+		}
+		current := strings.ToLower(ct.DatabaseTypeName())
+		if strings.Contains(current, "real") || strings.Contains(current, "float") || strings.Contains(current, "double") || strings.Contains(current, "numeric") {
+			return nil
+		}
+		log.Printf("widening inbounds.traffic_multiplier from %s to REAL for fractional weights", current)
+		return migrator.AlterColumn(&model.Inbound{}, "TrafficMultiplier")
+	}
+	return nil
+}
+
 func initModels() error {
 	if err := migrateClientTrafficLastSubFetchColumn(); err != nil {
 		return err
@@ -168,6 +203,9 @@ func initModels() error {
 		return err
 	}
 	if err := migrateInboundTrafficMultiplierColumn(); err != nil {
+		return err
+	}
+	if err := migrateInboundTrafficMultiplierWiden(); err != nil {
 		return err
 	}
 	models := allModels()
