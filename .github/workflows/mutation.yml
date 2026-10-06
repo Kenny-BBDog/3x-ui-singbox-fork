@@ -4,6 +4,10 @@ name: Mutation testing
 # source and a surviving (LIVED) mutant means no test caught the change. It is SLOW, so it
 # runs nightly / on demand and scoped per package — never per-commit. It is informational:
 # no thresholds are set, so it reports survivors as artifacts without failing the build.
+#
+# The nightly run is the only feedback loop this has, so watch it after changing the
+# job timeout or the matrix: every package must reach "Dry run completed" and upload
+# its report, not be cancelled.
 on:
   schedule:
     - cron: "0 3 * * *" # 03:00 UTC daily
@@ -15,7 +19,16 @@ permissions:
 jobs:
   gremlins:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Every package must be able to finish. The service package is by far the
+    # largest (283 source files, 2688 runnable mutants over 88 files) and does not
+    # fit in 120 minutes: it was cancelled at exactly the 120-minute mark on every
+    # run, including the one right after the repository went public and the quota
+    # stopped being the constraint. At the rate the sub package achieves (1467
+    # mutants in 105 minutes, about 14/min, the same runner and tool), service
+    # needs roughly 190-200 minutes. The ceiling is raised rather than shrinking
+    # the scope, because the service package is the one most worth mutating and
+    # cancelling it also discards its report (a cancelled job uploads no artifact).
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
