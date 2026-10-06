@@ -54,6 +54,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # deploy.sh loads its targets from deploy/hosts.env, which is gitignored
+      # because the repository is public and the real values describe live
+      # infrastructure. CI has no such file, and the script correctly refuses to
+      # run without one — so supply the committed example. Without this step the
+      # assertions below never reach the argument parser at all, including the
+      # `--help` one, and this job fails on a healthy script.
+      - name: Provide a configuration file
+        run: cp deploy/hosts.env.example deploy/hosts.env
+
       - name: Reject unknown arguments
         run: |
           if ./deploy/deploy.sh --definitely-not-a-real-flag >/dev/null 2>&1; then
