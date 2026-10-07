@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -26,6 +27,11 @@ type fakeNodeRuntime struct {
 	updateInbound atomic.Int32
 	updateSubSort atomic.Int32
 	updateUser    atomic.Int32
+
+	pushCertMu        sync.Mutex
+	pushCertCalls     []runtime.CertMaterial
+	pushCertUnchanged atomic.Bool
+	pushCertErr       error
 }
 
 func (f *fakeNodeRuntime) Name() string { return "fake-node" }
@@ -79,6 +85,21 @@ func (f *fakeNodeRuntime) ResetClientTraffic(context.Context, *model.Inbound, st
 }
 func (f *fakeNodeRuntime) ResetInboundTraffic(context.Context, *model.Inbound) error { return nil }
 func (f *fakeNodeRuntime) ResetAllTraffics(context.Context) error                    { return nil }
+func (f *fakeNodeRuntime) PushCertMaterial(_ context.Context, m runtime.CertMaterial) (bool, error) {
+	f.pushCertMu.Lock()
+	f.pushCertCalls = append(f.pushCertCalls, m)
+	f.pushCertMu.Unlock()
+	if f.pushCertErr != nil {
+		return false, f.pushCertErr
+	}
+	return !f.pushCertUnchanged.Load(), nil
+}
+
+func (f *fakeNodeRuntime) pushedMaterials() []runtime.CertMaterial {
+	f.pushCertMu.Lock()
+	defer f.pushCertMu.Unlock()
+	return append([]runtime.CertMaterial(nil), f.pushCertCalls...)
+}
 
 // startSerializedWriter runs the single traffic-writer goroutine for the test, so
 // concurrent service writes take the serialized path production uses.

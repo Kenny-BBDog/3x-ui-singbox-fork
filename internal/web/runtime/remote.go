@@ -677,6 +677,26 @@ func (r *Remote) GetWebCertFiles(ctx context.Context) (*WebCertFiles, error) {
 	return &files, nil
 }
 
+// PushCertMaterial installs TLS material on the node and reloads its sing-box
+// when a file actually changed. The node reports what it did, so a converged
+// node returns without a reload.
+func (r *Remote) PushCertMaterial(ctx context.Context, m CertMaterial) (bool, error) {
+	env, err := r.do(ctx, http.MethodPost, "panel/api/server/pushCertMaterial", m)
+	if err != nil {
+		return false, err
+	}
+	var out struct {
+		Changed  bool `json:"changed"`
+		Reloaded bool `json:"reloaded"`
+	}
+	if len(env.Obj) > 0 {
+		if err := json.Unmarshal(env.Obj, &out); err != nil {
+			return false, fmt.Errorf("decode cert push result: %w", err)
+		}
+	}
+	return out.Changed, nil
+}
+
 // GetDescendants fetches the node's read-only summaries of the nodes IT
 // manages, so this panel can surface them as transitive sub-nodes in a chained
 // topology (#4983). Best-effort: an old-build node without the endpoint returns

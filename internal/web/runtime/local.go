@@ -348,6 +348,10 @@ func (l *Local) ResetAllTraffics(_ context.Context) error {
 	return nil
 }
 
+func (l *Local) PushCertMaterial(_ context.Context, _ CertMaterial) (bool, error) {
+	return false, nil
+}
+
 func (l *Local) ResetInboundTraffic(_ context.Context, _ *model.Inbound) error {
 	return nil
 }

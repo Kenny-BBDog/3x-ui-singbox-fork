@@ -309,6 +309,7 @@ const (
 	cadenceNodeTraffic      = "@every 5s"
 	cadenceOutboundSub      = "@every 5m"
 	cadenceReapOrphans      = "@every 5m"
+	cadenceNodeCert         = "@every 1h"
 	cadenceRemoteRouting    = "@every 5m"
 	cadenceXrayLogPrune     = "@every 10m"
 	cadenceCheckHash        = "@every 2m"
@@ -378,6 +379,13 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
 
 	_, _ = s.cron.AddJob(cadenceReapOrphans, job.NewReapSyncOrphansJob())
+
+	// Carry renewed TLS material to the nodes. Run once at startup too, so a
+	// freshly added node — which has no material of its own — converges without
+	// waiting a full cadence.
+	certJob := job.NewNodeCertReconcileJob()
+	_, _ = s.cron.AddJob(cadenceNodeCert, certJob)
+	go certJob.Run()
 
 	// Warm permanent routing URLs immediately and refresh them outside the
 	// latency-sensitive subscription request path.

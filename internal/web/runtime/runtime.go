@@ -35,4 +35,19 @@ type Runtime interface {
 	ResetClientTraffic(ctx context.Context, ib *model.Inbound, email string) error
 	ResetInboundTraffic(ctx context.Context, ib *model.Inbound) error
 	ResetAllTraffics(ctx context.Context) error
+
+	// PushCertMaterial installs TLS material on the runtime's host and reports
+	// whether it changed anything. A node holds a copy that nothing refreshes, so
+	// it expires on a fixed date; Local has no copy of its own — the central panel
+	// is where the material comes from — so it is a no-op there, as DeleteClient is.
+	PushCertMaterial(ctx context.Context, m CertMaterial) (changed bool, err error)
+}
+
+// CertMaterial is one certificate/key pair to distribute onto a node. The paths
+// are absolute on the NODE and are confined to its certificate root there.
+type CertMaterial struct {
+	CertFile string `json:"certFile"`
+	KeyFile  string `json:"keyFile"`
+	Cert     string `json:"cert"`
+	Key      string `json:"key"`
 }

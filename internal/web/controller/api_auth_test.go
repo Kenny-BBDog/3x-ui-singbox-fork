@@ -151,6 +151,7 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/clients/update/:email":       {http.MethodPost: {}},
 		"/server/restartXrayService":   {http.MethodPost: {}},
 		"/server/getWebCertFiles":      {http.MethodGet: {}},
+		"/server/pushCertMaterial":     {http.MethodPost: {}},
 		"/server/descendants":          {http.MethodGet: {}},
 		"/clients/resetTraffic/:email": {http.MethodPost: {}},
 		"/inbounds/resetAllTraffics":   {http.MethodPost: {}},
