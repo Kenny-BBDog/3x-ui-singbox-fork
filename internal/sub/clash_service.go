@@ -73,12 +73,18 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 		if hostEps := subReq.hostEndpoints(inbound, "clash"); len(hostEps) > 0 {
 			injectExternalProxy(inbound, hostEps)
 		}
+		residential := isResidentialEgress(inbound.Settings)
 		for _, client := range clients {
 			if client.Enable {
 				hasEnabledClient = true
 			}
 			seenEmails[client.Email] = struct{}{}
-			proxies = append(proxies, s.getProxies(subReq, inbound, client, host)...)
+			for _, proxy := range s.getProxies(subReq, inbound, client, host) {
+				if residential {
+					proxy[residentialProxyMarker] = true
+				}
+				proxies = append(proxies, proxy)
+			}
 		}
 	}
 	for _, ext := range externalLinks {
@@ -175,8 +181,12 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			} else if err := mergeClashRulesYAML(config, resolved); err != nil {
 				return "", "", err
 			}
+			// After the merge, not before: the template owns which groups exist,
+			// and this only fills the ones that asked to be filled by role.
+			fillRoleGroups(config, residentialGroupKeyword, markedProxyNames(proxies, residentialProxyMarker))
 		}
 	}
+	stripProxyMarkers(proxies, residentialProxyMarker)
 
 	finalYAML, err := marshalClashYAML(config)
 	if err != nil {
@@ -302,6 +312,94 @@ func ensureUniqueProxyNames(proxies []map[string]any) {
 		}
 		seen[name] = struct{}{}
 		proxy["name"] = name
+	}
+}
+
+const (
+	// residentialProxyMarker tags a proxy built from an inbound with a chained
+	// egress. Internal only — stripped before the config is marshalled.
+	residentialProxyMarker = "__xuiResidentialRole"
+
+	// residentialGroupKeyword opts a template group into membership filled from the
+	// inbound's role, instead of from a pattern over proxy names.
+	residentialGroupKeyword = "by-role:residential"
+)
+
+// isResidentialEgress reports whether an inbound declares a chained third-party
+// egress. That declaration is what makes a line residential, and it survives a
+// rename — which a pattern over the proxy name, the 2026-10-07 failure, did not.
+func isResidentialEgress(settings string) bool {
+	if settings == "" {
+		return false
+	}
+	var parsed struct {
+		SBOutbound *struct {
+			Tag string `json:"tag"`
+		} `json:"sbOutbound"`
+	}
+	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
+		return false
+	}
+	return parsed.SBOutbound != nil && parsed.SBOutbound.Tag != ""
+}
+
+// fillRoleGroups replaces a role keyword in a group's filter with the membership the
+// panel derived from the inbounds, and drops the now-meaningless include-all. Groups
+// whose filter is anything else are left exactly as the template wrote them.
+func fillRoleGroups(config map[string]any, keyword string, names []string) {
+	groups, ok := asAnySlice(config["proxy-groups"])
+	if !ok {
+		return
+	}
+	for _, value := range groups {
+		group, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		if filter, _ := group["filter"].(string); strings.TrimSpace(filter) != keyword {
+			continue
+		}
+		delete(group, "filter")
+		delete(group, "include-all")
+
+		existing, _ := asAnySlice(group["proxies"])
+		merged := make([]any, 0, len(existing)+len(names))
+		seen := make(map[string]struct{}, len(existing)+len(names))
+		for _, ref := range existing {
+			if text, ok := ref.(string); ok {
+				seen[text] = struct{}{}
+			}
+			merged = append(merged, ref)
+		}
+		for _, name := range names {
+			if _, dup := seen[name]; dup {
+				continue
+			}
+			seen[name] = struct{}{}
+			merged = append(merged, name)
+		}
+		group["proxies"] = merged
+	}
+}
+
+// markedProxyNames returns the names of the proxies carrying marker, in order.
+func markedProxyNames(proxies []map[string]any, marker string) []string {
+	names := make([]string, 0, len(proxies))
+	for _, proxy := range proxies {
+		if marked, _ := proxy[marker].(bool); !marked {
+			continue
+		}
+		if name, ok := proxy["name"].(string); ok && name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// stripProxyMarkers drops the internal role marker so it can never reach the YAML.
+func stripProxyMarkers(proxies []map[string]any, marker string) {
+	for _, proxy := range proxies {
+		delete(proxy, marker)
 	}
 }
 
