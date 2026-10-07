@@ -53,9 +53,7 @@ func inboundCanEnableTlsFlow(protocol, streamSettings, settings string) bool {
 	}
 }
 
-// nodeEligibleProtocols mirrors the frontend's NODE_ELIGIBLE_PROTOCOLS. The
-// sidecar-managed protocols are absent because their reconcile loops only query
-// NodeID IS NULL rows, so a node-assigned one would never be reconciled at all.
+// nodeEligibleProtocols mirrors the frontend's NODE_ELIGIBLE_PROTOCOLS.
 // A new protocol defaults to ineligible until added here, as on the frontend.
 var nodeEligibleProtocols = map[model.Protocol]bool{
 	model.VLESS:       true,
@@ -64,6 +62,8 @@ var nodeEligibleProtocols = map[model.Protocol]bool{
 	model.Shadowsocks: true,
 	model.Hysteria:    true,
 	model.WireGuard:   true,
+	model.AnyTLS:      true,
+	model.Hysteria2SB: true,
 }
 
 // isNodeEligibleProtocol reports whether protocol may be assigned to a node.
