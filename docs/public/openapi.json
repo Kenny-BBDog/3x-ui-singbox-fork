@@ -2307,6 +2307,17 @@
             "format": "int64",
             "type": "integer"
           },
+          "rawDown": {
+            "example": 2097152,
+            "format": "int64",
+            "type": "integer"
+          },
+          "rawUp": {
+            "description": "RawUp and RawDown are the unweighted bytes behind Up/Down. Up/Down carry\nthe weighted value (what quota enforcement compares against Total), so a\nnode with a traffic multiplier depletes a quota faster; these keep the true\nbyte count so a mis-set multiplier stays auditable and correctable rather\nthan being permanently baked into the total. Equal to Up/Down while every\ninbound is 1x.",
+            "example": 1048576,
+            "format": "int64",
+            "type": "integer"
+          },
           "reset": {
             "example": 0,
             "type": "integer"
@@ -2359,6 +2370,8 @@
           "inboundId",
           "lastOnline",
           "lastSubFetch",
+          "rawDown",
+          "rawUp",
           "reset",
           "resetCount",
           "resetDay",
@@ -3115,7 +3128,9 @@
               "tun",
               "mtproto",
               "amneziawg",
-              "tuic"
+              "tuic",
+              "anytls",
+              "hysteria2sb"
             ],
             "example": "vless",
             "type": "string"
@@ -3152,6 +3167,13 @@
             "description": "Total traffic limit in bytes",
             "format": "int64",
             "type": "integer"
+          },
+          "trafficMultiplier": {
+            "description": "TrafficMultiplier weights every byte metered on this inbound when it is\ncharged against a client's quota, so a more expensive route (residential,\nCN2GIA) can consume a quota faster than a cheap high-volume line. 1 means\n1:1; 1.5 means a byte on this route spends one and a half bytes of quota.\nA fractional weight is allowed because route costs are not all whole\nmultiples. The weight is applied to each metering delta and the result is\nrounded to a whole byte, so the accumulated total never drifts.\nOnly meaningful for a local inbound — a mirror row carries the value so the\nUI can show it, and the node that meters the traffic applies it.",
+            "example": 1,
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "number"
           },
           "trafficReset": {
             "description": "Traffic reset schedule",
@@ -3198,6 +3220,7 @@
           "subSortIndex",
           "tag",
           "total",
+          "trafficMultiplier",
           "trafficReset",
           "trafficResetDay",
           "up"
@@ -4841,6 +4864,10 @@
       "description": "Manage remote 3x-ui panels acting as nodes for a central panel. All endpoints under /panel/api/nodes."
     },
     {
+      "name": "sing-box",
+      "description": "Control endpoints for the sing-box core, which this fork runs alongside Xray for the anytls and hysteria2sb inbounds. Inbound and client CRUD for those protocols uses the regular inbounds/clients endpoints — sing-box inbounds are ordinary rows in the shared tables, so quotas, expiry, traffic and subscriptions behave identically. This group only exposes process status and control."
+    },
+    {
       "name": "Hosts",
       "description": "Per-inbound override endpoints. Each enabled host renders one extra subscription link/proxy with its own address/port/TLS, superseding the legacy externalProxy array. All endpoints under /panel/api/hosts."
     },
@@ -5161,6 +5188,8 @@
                           "inboundId": 1,
                           "lastOnline": 1735680000000,
                           "lastSubFetch": 1735680000000,
+                          "rawDown": 2097152,
+                          "rawUp": 1048576,
                           "reset": 0,
                           "resetCount": 0,
                           "resetDay": 0,
@@ -5194,6 +5223,7 @@
                       "subSortIndex": 1,
                       "tag": "in-443-tcp",
                       "total": 0,
+                      "trafficMultiplier": 1,
                       "trafficReset": "never",
                       "trafficResetDay": 1,
                       "up": 0
@@ -6825,6 +6855,43 @@
                   "obj": {
                     "webCertFile": "/root/cert/example.com/fullchain.pem",
                     "webKeyFile": "/root/cert/example.com/privkey.pem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/pushCertMaterial": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Install a TLS certificate and key pushed by the central panel, then reload the sing-box core if either file changed. A node's copy is otherwise frozen at whatever was copied onto it by hand, so it expires on a fixed date while the master's renews. Paths must lie under /etc/letsencrypt/live/; the pair is rejected unless the certificate matches the key.",
+        "operationId": "post_panel_api_server_pushCertMaterial",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "changed": true,
+                    "reloaded": true
                   }
                 }
               }
@@ -10746,6 +10813,8 @@
                     "inboundId": 1,
                     "lastOnline": 1735680000000,
                     "lastSubFetch": 1735680000000,
+                    "rawDown": 2097152,
+                    "rawUp": 1048576,
                     "reset": 0,
                     "resetCount": 0,
                     "resetDay": 0,
@@ -11814,6 +11883,96 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/singbox/status": {
+      "get": {
+        "tags": [
+          "sing-box"
+        ],
+        "summary": "Current sing-box process state: whether it is running, its version, the resolved binary path, and the last start error if any.",
+        "operationId": "get_panel_api_singbox_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/singbox/previewConfig": {
+      "get": {
+        "tags": [
+          "sing-box"
+        ],
+        "summary": "The sing-box configuration the panel currently renders from the database, as a JSON string. Useful for confirming what the core would load before a restart.",
+        "operationId": "get_panel_api_singbox_previewConfig",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/singbox/restart": {
+      "post": {
+        "tags": [
+          "sing-box"
+        ],
+        "summary": "Restart the sing-box process. Existing client connections through sing-box inbounds drop and reconnect.",
+        "operationId": "post_panel_api_singbox_restart",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -14246,6 +14405,36 @@
         }
       }
     },
+    "/panel/api/xray/geodata/subscriptionCache": {
+      "get": {
+        "tags": [
+          "Xray Settings"
+        ],
+        "summary": "Freshness of the geo databases the subscription server serves to Clash/Mihomo clients: each cached asset with its size, age and source, so a stale cache is visible before clients route on outdated rules.",
+        "operationId": "get_panel_api_xray_geodata_subscriptionCache",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/xray/geodata/categories": {
       "get": {
         "tags": [
@@ -16120,6 +16309,8 @@
                     "inboundId": 1,
                     "lastOnline": 1735680000000,
                     "lastSubFetch": 1735680000000,
+                    "rawDown": 2097152,
+                    "rawUp": 1048576,
                     "reset": 0,
                     "resetCount": 0,
                     "resetDay": 0,
@@ -16203,6 +16394,8 @@
                     "inboundId": 1,
                     "lastOnline": 1735680000000,
                     "lastSubFetch": 1735680000000,
+                    "rawDown": 2097152,
+                    "rawUp": 1048576,
                     "reset": 0,
                     "resetCount": 0,
                     "resetDay": 0,
@@ -16250,6 +16443,8 @@
                       "inboundId": 1,
                       "lastOnline": 1735680000000,
                       "lastSubFetch": 1735680000000,
+                      "rawDown": 2097152,
+                      "rawUp": 1048576,
                       "reset": 0,
                       "resetCount": 0,
                       "resetDay": 0,
@@ -16283,6 +16478,7 @@
                   "subSortIndex": 1,
                   "tag": "in-443-tcp",
                   "total": 0,
+                  "trafficMultiplier": 1,
                   "trafficReset": "never",
                   "trafficResetDay": 1,
                   "up": 0
