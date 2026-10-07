@@ -73,16 +73,14 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 		if hostEps := subReq.hostEndpoints(inbound, "clash"); len(hostEps) > 0 {
 			injectExternalProxy(inbound, hostEps)
 		}
-		residential := isResidentialEgress(inbound.Settings)
+		role := inboundProxyRole(inbound.Settings)
 		for _, client := range clients {
 			if client.Enable {
 				hasEnabledClient = true
 			}
 			seenEmails[client.Email] = struct{}{}
 			for _, proxy := range s.getProxies(subReq, inbound, client, host) {
-				if residential {
-					proxy[residentialProxyMarker] = true
-				}
+				proxy[proxyRoleMarker] = role
 				proxies = append(proxies, proxy)
 			}
 		}
@@ -183,10 +181,10 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			}
 			// After the merge, not before: the template owns which groups exist,
 			// and this only fills the ones that asked to be filled by role.
-			fillRoleGroups(config, residentialGroupKeyword, markedProxyNames(proxies, residentialProxyMarker))
+			fillRoleGroups(config, proxyNamesByRole(proxies))
 		}
 	}
-	stripProxyMarkers(proxies, residentialProxyMarker)
+	stripProxyMarkers(proxies)
 
 	finalYAML, err := marshalClashYAML(config)
 	if err != nil {
@@ -316,37 +314,45 @@ func ensureUniqueProxyNames(proxies []map[string]any) {
 }
 
 const (
-	// residentialProxyMarker tags a proxy built from an inbound with a chained
-	// egress. Internal only — stripped before the config is marshalled.
-	residentialProxyMarker = "__xuiResidentialRole"
+	// proxyRoleMarker tags a proxy with the role its inbound plays. Internal only —
+	// stripped before the config is marshalled.
+	proxyRoleMarker = "__xuiProxyRole"
 
-	// residentialGroupKeyword opts a template group into membership filled from the
-	// inbound's role, instead of from a pattern over proxy names.
-	residentialGroupKeyword = "by-role:residential"
+	// roleKeywordPrefix marks a group filled from a role rather than from a pattern
+	// over proxy names: `by-role:residential`, `by-role:direct`.
+	roleKeywordPrefix = "by-role:"
+
+	// A residential line chains out to a third-party egress; a direct line exits on
+	// the host itself. The panel declares the former and infers the latter.
+	roleResidential = "residential"
+	roleDirect      = "direct"
 )
 
-// isResidentialEgress reports whether an inbound declares a chained third-party
-// egress. That declaration is what makes a line residential, and it survives a
-// rename — which a pattern over the proxy name, the 2026-10-07 failure, did not.
-func isResidentialEgress(settings string) bool {
-	if settings == "" {
-		return false
-	}
+// inboundProxyRole reports the role an inbound plays, read from its own declaration.
+// Unlike a pattern over the proxy name — the 2026-10-07 failure — this survives a
+// rename, which is the whole reason membership no longer consults names.
+func inboundProxyRole(settings string) string {
 	var parsed struct {
 		SBOutbound *struct {
 			Tag string `json:"tag"`
 		} `json:"sbOutbound"`
 	}
-	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
-		return false
+	if settings != "" {
+		if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
+			return roleDirect
+		}
 	}
-	return parsed.SBOutbound != nil && parsed.SBOutbound.Tag != ""
+	if parsed.SBOutbound != nil && parsed.SBOutbound.Tag != "" {
+		return roleResidential
+	}
+	return roleDirect
 }
 
-// fillRoleGroups replaces a role keyword in a group's filter with the membership the
-// panel derived from the inbounds, and drops the now-meaningless include-all. Groups
-// whose filter is anything else are left exactly as the template wrote them.
-func fillRoleGroups(config map[string]any, keyword string, names []string) {
+// fillRoleGroups fills every group whose filter is a `by-role:<role>` keyword with
+// the proxies carrying that role, and drops the now-meaningless filter and
+// include-all. A group whose filter is not a keyword is left exactly as the template
+// wrote it, so the two membership mechanisms stay distinguishable.
+func fillRoleGroups(config map[string]any, namesByRole map[string][]string) {
 	groups, ok := asAnySlice(config["proxy-groups"])
 	if !ok {
 		return
@@ -356,7 +362,15 @@ func fillRoleGroups(config map[string]any, keyword string, names []string) {
 		if !ok {
 			continue
 		}
-		if filter, _ := group["filter"].(string); strings.TrimSpace(filter) != keyword {
+		filter, _ := group["filter"].(string)
+		filter = strings.TrimSpace(filter)
+		if !strings.HasPrefix(filter, roleKeywordPrefix) {
+			continue
+		}
+		// An unknown role is deliberately left in place: the keyword then shows up in
+		// the emitted config, where a typo is diagnosable, instead of vanishing.
+		names, known := namesByRole[strings.TrimSpace(strings.TrimPrefix(filter, roleKeywordPrefix))]
+		if !known {
 			continue
 		}
 		delete(group, "filter")
@@ -382,24 +396,25 @@ func fillRoleGroups(config map[string]any, keyword string, names []string) {
 	}
 }
 
-// markedProxyNames returns the names of the proxies carrying marker, in order.
-func markedProxyNames(proxies []map[string]any, marker string) []string {
-	names := make([]string, 0, len(proxies))
+// proxyNamesByRole groups the marked proxies' names by the role they carry, in order.
+func proxyNamesByRole(proxies []map[string]any) map[string][]string {
+	byRole := map[string][]string{roleResidential: {}, roleDirect: {}}
 	for _, proxy := range proxies {
-		if marked, _ := proxy[marker].(bool); !marked {
+		role, _ := proxy[proxyRoleMarker].(string)
+		if _, known := byRole[role]; !known {
 			continue
 		}
 		if name, ok := proxy["name"].(string); ok && name != "" {
-			names = append(names, name)
+			byRole[role] = append(byRole[role], name)
 		}
 	}
-	return names
+	return byRole
 }
 
 // stripProxyMarkers drops the internal role marker so it can never reach the YAML.
-func stripProxyMarkers(proxies []map[string]any, marker string) {
+func stripProxyMarkers(proxies []map[string]any) {
 	for _, proxy := range proxies {
-		delete(proxy, marker)
+		delete(proxy, proxyRoleMarker)
 	}
 }
 
