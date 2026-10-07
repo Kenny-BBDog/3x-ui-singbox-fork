@@ -599,6 +599,14 @@ export const sections: readonly Section[] = [
           '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/root/cert/example.com/fullchain.pem",\n    "webKeyFile": "/root/cert/example.com/privkey.pem"\n  }\n}',
       },
       {
+        method: 'POST',
+        path: '/panel/api/server/pushCertMaterial',
+        summary:
+          "Install a TLS certificate and key pushed by the central panel, then reload the sing-box core if either file changed. A node's copy is otherwise frozen at whatever was copied onto it by hand, so it expires on a fixed date while the master's renews. Paths must lie under /etc/letsencrypt/live/; the pair is rejected unless the certificate matches the key.",
+        response:
+          '{\n  "success": true,\n  "obj": {\n    "changed": true,\n    "reloaded": true\n  }\n}',
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/descendants',
         summary:

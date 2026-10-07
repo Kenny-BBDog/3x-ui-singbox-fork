@@ -6863,6 +6863,43 @@
         }
       }
     },
+    "/panel/api/server/pushCertMaterial": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Install a TLS certificate and key pushed by the central panel, then reload the sing-box core if either file changed. A node's copy is otherwise frozen at whatever was copied onto it by hand, so it expires on a fixed date while the master's renews. Paths must lie under /etc/letsencrypt/live/; the pair is rejected unless the certificate matches the key.",
+        "operationId": "post_panel_api_server_pushCertMaterial",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "changed": true,
+                    "reloaded": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/descendants": {
       "get": {
         "tags": [

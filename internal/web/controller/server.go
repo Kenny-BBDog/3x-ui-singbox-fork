@@ -57,6 +57,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getMigration", a.getMigration)
 	g.GET("/getNewUUID", a.getNewUUID)
 	g.GET("/getWebCertFiles", a.getWebCertFiles)
+	g.POST("/pushCertMaterial", a.pushCertMaterial)
 	g.GET("/descendants", a.descendants)
 	g.GET("/getNewX25519Cert", a.getNewX25519Cert)
 	g.GET("/getNewmldsa65", a.getNewmldsa65)
@@ -421,6 +422,53 @@ func (a *ServerController) getWebCertFiles(c *gin.Context) {
 		return
 	}
 	jsonObj(c, gin.H{"webCertFile": certFile, "webKeyFile": keyFile}, nil)
+}
+
+// pushCertMaterialRequest carries one certificate/key pair from the master.
+type pushCertMaterialRequest struct {
+	CertFile string `json:"certFile" form:"certFile"`
+	KeyFile  string `json:"keyFile" form:"keyFile"`
+	Cert     string `json:"cert" form:"cert"`
+	Key      string `json:"key" form:"key"`
+}
+
+// reloadSingbox is a var so a test can observe the reload decision without
+// spawning a real sing-box process.
+var reloadSingbox = func() error { return newSingboxSvc().Restart() }
+
+// certMaterialRoot is a var so a test can point the route at a temp tree.
+var certMaterialRoot = service.CertMaterialRoot
+
+// pushCertMaterial installs TLS material the master pushed. A node's copy is
+// otherwise frozen at whatever was copied onto it by hand, so it expires on a
+// fixed date while the master's certificate renews normally.
+func (a *ServerController) pushCertMaterial(c *gin.Context) {
+	form := &pushCertMaterialRequest{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, "push certificate material", err)
+		return
+	}
+	changed, err := service.InstallCertMaterial(certMaterialRoot, service.CertMaterial{
+		CertFile: form.CertFile,
+		KeyFile:  form.KeyFile,
+		Cert:     []byte(form.Cert),
+		Key:      []byte(form.Key),
+	})
+	if err != nil {
+		jsonMsg(c, "push certificate material", err)
+		return
+	}
+	if !changed {
+		jsonObj(c, gin.H{"changed": false, "reloaded": false}, nil)
+		return
+	}
+	// Restart, not Apply: Apply's fingerprint guard would skip the reload and
+	// sing-box would keep serving the previous certificate from memory.
+	if err := reloadSingbox(); err != nil {
+		jsonMsg(c, "reload sing-box after a certificate change", err)
+		return
+	}
+	jsonObj(c, gin.H{"changed": true, "reloaded": true}, nil)
 }
 
 // getNewX25519Cert generates a new X25519 certificate.

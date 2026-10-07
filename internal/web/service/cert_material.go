@@ -11,6 +11,9 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/atomicfile"
 )
 
+// CertMaterialRoot is the only directory tree a node accepts TLS material into.
+const CertMaterialRoot = "/etc/letsencrypt/live/"
+
 // CertMaterial is one TLS certificate and its key, as the master distributes
 // them to a node. Paths are absolute and must sit under the caller's root.
 type CertMaterial struct {
