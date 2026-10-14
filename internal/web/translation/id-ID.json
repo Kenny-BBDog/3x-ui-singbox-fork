@@ -139,7 +139,8 @@
         "emptyPassword": "Kata Sandi diperlukan",
         "wrongUsernameOrPassword": "Username, kata sandi, atau kode dua faktor tidak valid.",
         "successLogin": "Anda telah berhasil masuk ke akun Anda."
-      }
+      },
+      "twoFactorCodeOptional": "Biarkan kosong jika akun ini tidak punya autentikator."
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "URL server DoH, biasanya berakhiran /dns-query.",
       "subIncyResolveDnsIp": "IP server DoH",
       "subIncyResolveDnsIpDesc": "IP server DoH untuk bootstrap.",
-      "subIncyGroupRouting": "Perutean"
+      "subIncyGroupRouting": "Perutean",
+      "users": {
+        "tab": "Administrator",
+        "hint": "Setiap akun di sini mengelola seluruh panel: inbound, klien, dan pengaturan yang sama.",
+        "add": "Tambah administrator",
+        "you": "Anda",
+        "removeWarning": "Aksesnya langsung hilang. Ini tidak bisa dibatalkan.",
+        "addHint": "Akun baru masuk tanpa autentikasi dua faktor. Pemiliknya bisa mengaktifkannya di Keamanan.",
+        "toasts": {
+          "added": "Administrator ditambahkan",
+          "deleted": "Administrator dihapus",
+          "failed": "Tidak dapat memperbarui administrator",
+          "twoFactorSaved": "Pengaturan dua faktor disimpan"
+        }
+      }
     },
     "xray": {
       "save": "Simpan",

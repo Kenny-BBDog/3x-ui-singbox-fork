@@ -169,8 +169,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "timeLocation": "",
     "trafficDiff": 0,
     "trustedProxyCIDRs": "",
-    "twoFactorEnable": false,
-    "twoFactorToken": "",
     "warpUpdateInterval": 0,
     "webBasePath": "",
     "webCertFile": "",
@@ -202,7 +200,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "hasNordSecret": false,
     "hasSmtpPassword": false,
     "hasTgBotToken": false,
-    "hasTwoFactorToken": false,
     "hasWarpSecret": false,
     "ipLimitAllowlist": "",
     "ldapAutoCreate": false,
@@ -356,8 +353,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "timeLocation": "",
     "trafficDiff": 0,
     "trustedProxyCIDRs": "",
-    "twoFactorEnable": false,
-    "twoFactorToken": "",
     "warpUpdateInterval": 0,
     "webBasePath": "",
     "webCertFile": "",
@@ -1187,6 +1182,7 @@ export const EXAMPLES: Record<string, unknown> = {
   "User": {
     "id": 0,
     "password": "",
+    "twoFactorEnable": false,
     "username": ""
   }
 };

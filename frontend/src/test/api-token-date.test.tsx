@@ -1,13 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AllSetting } from '@/models/setting';
 import SecurityTab from '@/pages/settings/SecurityTab';
 import { HttpUtil } from '@/utils';
 
 describe('API token creation date', () => {
   it('renders both API seconds and legacy millisecond timestamps', async () => {
-    vi.spyOn(HttpUtil, 'get').mockResolvedValueOnce({
+    const get = vi.spyOn(HttpUtil, 'get');
+    // Mount fetches the token list first and the administrator list second.
+    get.mockResolvedValueOnce({
       success: true,
       msg: '',
       obj: [
@@ -25,10 +26,9 @@ describe('API token creation date', () => {
         },
       ],
     });
+    get.mockResolvedValueOnce({ success: true, msg: '', obj: [] });
 
-    render(
-      <SecurityTab allSetting={{} as AllSetting} updateSetting={vi.fn()} saveSetting={vi.fn()} />,
-    );
+    render(<SecurityTab />);
     fireEvent.click(screen.getByRole('tab', { name: /API Token/ }));
 
     expect(await screen.findByText('seconds-token')).toBeTruthy();

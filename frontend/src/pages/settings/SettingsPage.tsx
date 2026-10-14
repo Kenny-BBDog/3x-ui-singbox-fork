@@ -79,16 +79,8 @@ export default function SettingsPage() {
     setMessageInstance(messageApi);
   }, [messageApi]);
 
-  const {
-    allSetting,
-    updateSetting,
-    fetched,
-    spinning,
-    setSpinning,
-    saveDisabled,
-    saveAll,
-    savePayload,
-  } = useAllSettings();
+  const { allSetting, updateSetting, fetched, spinning, setSpinning, saveDisabled, saveAll } =
+    useAllSettings();
 
   const [entryHost] = useState(() => window.location.hostname);
   const [entryPort] = useState(() => window.location.port);
@@ -208,13 +200,7 @@ export default function SettingsPage() {
   const categoryBody = useMemo(() => {
     switch (activeSlug) {
       case 'security':
-        return (
-          <SecurityTab
-            allSetting={allSetting}
-            updateSetting={updateSetting}
-            saveSetting={savePayload}
-          />
-        );
+        return <SecurityTab />;
       case 'telegram':
         return <TelegramTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'email':
@@ -230,7 +216,7 @@ export default function SettingsPage() {
       default:
         return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
     }
-  }, [activeSlug, allSetting, updateSetting, savePayload]);
+  }, [activeSlug, allSetting, updateSetting]);
 
   return (
     <ConfigProvider theme={antdThemeConfig}>

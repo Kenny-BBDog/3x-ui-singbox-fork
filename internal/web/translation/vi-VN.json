@@ -139,7 +139,8 @@
         "emptyPassword": "Vui lòng nhập mật khẩu.",
         "wrongUsernameOrPassword": "Tên người dùng, mật khẩu hoặc mã xác thực hai yếu tố không hợp lệ.",
         "successLogin": "Bạn đã đăng nhập vào tài khoản thành công."
-      }
+      },
+      "twoFactorCodeOptional": "Để trống nếu tài khoản này không có trình xác thực."
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "URL máy chủ DoH, thường kết thúc bằng /dns-query.",
       "subIncyResolveDnsIp": "IP máy chủ DoH",
       "subIncyResolveDnsIpDesc": "IP máy chủ DoH để khởi tạo.",
-      "subIncyGroupRouting": "Định tuyến"
+      "subIncyGroupRouting": "Định tuyến",
+      "users": {
+        "tab": "Quản trị viên",
+        "hint": "Mọi tài khoản ở đây đều quản lý toàn bộ bảng điều khiển: cùng inbound, khách hàng và cài đặt.",
+        "add": "Thêm quản trị viên",
+        "you": "Bạn",
+        "removeWarning": "Họ mất quyền truy cập ngay lập tức. Không thể hoàn tác.",
+        "addHint": "Tài khoản mới đăng nhập mà không cần xác thực hai bước. Chủ tài khoản có thể bật trong Bảo mật.",
+        "toasts": {
+          "added": "Đã thêm quản trị viên",
+          "deleted": "Đã xóa quản trị viên",
+          "failed": "Không thể cập nhật quản trị viên",
+          "twoFactorSaved": "Đã lưu cài đặt xác thực hai bước"
+        }
+      }
     },
     "xray": {
       "importRules": "Nhập quy tắc",

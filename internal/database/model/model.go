@@ -48,12 +48,16 @@ func (p Protocol) IsSingbox() bool {
 	return p == AnyTLS || p == Hysteria2SB
 }
 
-// User represents a user account in the 3x-ui panel.
+// User represents a user account in the 3x-ui panel. Every user is an
+// administrator over the whole panel; the second factor is per user so one
+// operator can carry an authenticator while another works without one.
 type User struct {
-	Id         int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	LoginEpoch int64  `json:"-" gorm:"default:0"`
+	Id              int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	LoginEpoch      int64  `json:"-" gorm:"default:0"`
+	TwoFactorEnable bool   `json:"twoFactorEnable" gorm:"default:false"`
+	TwoFactorToken  string `json:"-" gorm:"default:''"`
 }
 
 // Inbound represents an Xray inbound configuration with traffic statistics and settings.

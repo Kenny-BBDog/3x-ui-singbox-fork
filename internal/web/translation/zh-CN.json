@@ -139,7 +139,8 @@
         "emptyPassword": "请输入密码",
         "wrongUsernameOrPassword": "用户名、密码或双重验证码无效。",
         "successLogin": "您已成功登录您的账户。"
-      }
+      },
+      "twoFactorCodeOptional": "如果该账号没有绑定验证器，留空即可。"
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "DoH 服务器 URL，通常以 /dns-query 结尾。",
       "subIncyResolveDnsIp": "DoH 服务器 IP",
       "subIncyResolveDnsIpDesc": "用于引导的 DoH 服务器 IP。",
-      "subIncyGroupRouting": "路由"
+      "subIncyGroupRouting": "路由",
+      "users": {
+        "tab": "管理员",
+        "hint": "这里的每个账号都管理整个面板——同一批入站、客户端和设置。",
+        "add": "添加管理员",
+        "you": "当前账号",
+        "removeWarning": "该账号会立刻失去访问权限，且无法撤销。",
+        "addHint": "新账号登录时不需要两步验证；其本人可以在「安全」里自行开启。",
+        "toasts": {
+          "added": "管理员已添加",
+          "deleted": "管理员已移除",
+          "failed": "无法更新管理员",
+          "twoFactorSaved": "两步验证设置已保存"
+        }
+      }
     },
     "xray": {
       "importRules": "导入规则",

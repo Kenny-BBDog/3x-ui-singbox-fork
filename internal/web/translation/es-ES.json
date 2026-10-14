@@ -139,7 +139,8 @@
         "emptyPassword": "Por favor ingresa la contraseña.",
         "wrongUsernameOrPassword": "Nombre de usuario, contraseña o código de dos factores incorrecto.",
         "successLogin": "Has iniciado sesión en tu cuenta correctamente."
-      }
+      },
+      "twoFactorCodeOptional": "Déjalo en blanco si esta cuenta no tiene autenticador."
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "URL del servidor DoH, normalmente acaba en /dns-query.",
       "subIncyResolveDnsIp": "IP del servidor DoH",
       "subIncyResolveDnsIpDesc": "IP del servidor DoH para el arranque.",
-      "subIncyGroupRouting": "Enrutado"
+      "subIncyGroupRouting": "Enrutado",
+      "users": {
+        "tab": "Administradores",
+        "hint": "Cada cuenta de aquí administra todo el panel: los mismos inbounds, clientes y ajustes.",
+        "add": "Añadir administrador",
+        "you": "Tú",
+        "removeWarning": "Perderá el acceso de inmediato. Esto no se puede deshacer.",
+        "addHint": "La cuenta nueva entra sin autenticación en dos pasos. Su titular puede activarla en Seguridad.",
+        "toasts": {
+          "added": "Administrador añadido",
+          "deleted": "Administrador eliminado",
+          "failed": "No se pudieron actualizar los administradores",
+          "twoFactorSaved": "Ajuste de doble factor guardado"
+        }
+      }
     },
     "xray": {
       "save": "Guardar configuración",

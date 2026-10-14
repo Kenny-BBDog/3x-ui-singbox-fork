@@ -37,7 +37,7 @@ func TestEnrichClientStats_UsesClientsTableUUIDWhenSettingsStale(t *testing.T) {
 	}
 
 	svc := &InboundService{}
-	inbounds, err := svc.GetInbounds(1)
+	inbounds, err := svc.GetInbounds()
 	if err != nil {
 		t.Fatalf("GetInbounds: %v", err)
 	}

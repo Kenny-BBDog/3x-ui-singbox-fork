@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Empty, Form, Input, Modal, Space, Spin, Switch, Tabs, message } from 'antd';
-import { ApiOutlined, SafetyOutlined, UserOutlined } from '@ant-design/icons';
+import { Button, Form, Input, Modal, Space, Spin, Switch, Tabs, message } from 'antd';
+import { ApiOutlined, SafetyOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { ClipboardManager, HttpUtil, IntlUtil, RandomUtil } from '@/utils';
-import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
@@ -25,10 +24,11 @@ interface ApiTokenRow {
   expiresAt: number;
 }
 
-interface SecurityTabProps {
-  allSetting: AllSetting;
-  updateSetting: (patch: Partial<AllSetting>) => void;
-  saveSetting: (payload: Partial<AllSetting> & Record<string, unknown>) => Promise<unknown>;
+interface PanelUser {
+  id: number;
+  username: string;
+  twoFactorEnable: boolean;
+  isSelf: boolean;
 }
 
 const UNIX_MILLISECONDS_THRESHOLD = 100_000_000_000;
@@ -57,7 +57,7 @@ const TFA_INITIAL: TfaState = {
   onConfirm: () => {},
 };
 
-export default function SecurityTab({ allSetting, updateSetting, saveSetting }: SecurityTabProps) {
+export default function SecurityTab() {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
   const [modal, modalContextHolder] = Modal.useModal();
@@ -78,6 +78,17 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<{ name: string; token: string } | null>(null);
+
+  const [users, setUsers] = useState<PanelUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addUsername, setAddUsername] = useState('');
+  const [addPassword, setAddPassword] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  // The second factor belongs to the account, so the switch reads the signed-in
+  // row rather than a panel-wide setting — and so does the credentials form.
+  const selfTwoFactor = users.find((row) => row.isSelf)?.twoFactorEnable ?? false;
 
   const openTfa = useCallback((opts: Omit<TfaState, 'open'>) => {
     setTfa({ ...opts, open: true });
@@ -115,7 +126,7 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
   );
 
   function onUpdateUserClick() {
-    if (allSetting.twoFactorEnable) {
+    if (selfTwoFactor) {
       openTfa({
         title: t('pages.settings.security.twoFactorModalChangeCredentialsTitle'),
         description: t('pages.settings.security.twoFactorModalChangeCredentialsStep'),
@@ -144,9 +155,24 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
     await fetchApiTokens();
   }, [fetchApiTokens]);
 
+  const fetchUsers = useCallback(async () => {
+    try {
+      const msg = (await HttpUtil.get('/panel/api/users/list')) as ApiMsg<PanelUser[]>;
+      if (msg?.success) setUsers(Array.isArray(msg.obj) ? msg.obj : []);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    await fetchUsers();
+  }, [fetchUsers]);
+
   useEffect(() => {
     void fetchApiTokens();
-  }, [fetchApiTokens]);
+    void fetchUsers();
+  }, [fetchApiTokens, fetchUsers]);
 
   async function copyToken(token: string) {
     if (!token) return;
@@ -217,8 +243,22 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
     return IntlUtil.formatDate(apiTokenCreatedAtMilliseconds(ts));
   }
 
+  async function postTwoFactor(enable: boolean, token: string, code: string) {
+    const msg = (await HttpUtil.post('/panel/api/users/twoFactor', {
+      enable,
+      token,
+      code,
+    })) as ApiMsg;
+    if (msg?.success) {
+      messageApi.success(t('pages.settings.users.toasts.twoFactorSaved'));
+      await loadUsers();
+    } else if (msg?.msg) {
+      messageApi.error(msg.msg);
+    }
+  }
+
   function toggleTwoFactor() {
-    if (!allSetting.twoFactorEnable) {
+    if (!selfTwoFactor) {
       const newToken = RandomUtil.randomBase32String();
       openTfa({
         title: t('pages.settings.security.twoFactorModalSetTitle'),
@@ -226,12 +266,7 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
         token: newToken,
         type: 'set',
         onConfirm: (ok: boolean) => {
-          if (ok) {
-            messageApi.success(t('pages.settings.security.twoFactorModalSetSuccess'));
-            updateSetting({ twoFactorToken: newToken, twoFactorEnable: true });
-          } else {
-            updateSetting({ twoFactorEnable: false });
-          }
+          if (ok) void postTwoFactor(true, newToken, '');
         },
       });
     } else {
@@ -240,22 +275,60 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
         description: t('pages.settings.security.twoFactorModalRemoveStep'),
         token: '',
         type: 'confirm',
-        onConfirm: async (ok: boolean, code?: string) => {
-          if (!ok) return;
-          const next = {
-            ...allSetting,
-            twoFactorEnable: false,
-            twoFactorToken: '',
-            twoFactorCode: code || '',
-          };
-          const msg = (await saveSetting(next)) as ApiMsg;
-          if (msg?.success) {
-            messageApi.success(t('pages.settings.security.twoFactorModalDeleteSuccess'));
-            updateSetting({ twoFactorEnable: false, twoFactorToken: '', hasTwoFactorToken: false });
-          }
+        onConfirm: (ok: boolean, code?: string) => {
+          if (ok) void postTwoFactor(false, '', code || '');
         },
       });
     }
+  }
+
+  function openAddUser() {
+    setAddUsername('');
+    setAddPassword('');
+    setAddOpen(true);
+  }
+
+  async function confirmAddUser() {
+    const username = addUsername.trim();
+    if (!username || !addPassword) {
+      messageApi.error(t('pages.settings.users.toasts.failed'));
+      return;
+    }
+    setAdding(true);
+    try {
+      const msg = (await HttpUtil.post('/panel/api/users/add', {
+        username,
+        password: addPassword,
+      })) as ApiMsg;
+      if (msg?.success) {
+        messageApi.success(t('pages.settings.users.toasts.added'));
+        setAddOpen(false);
+        await loadUsers();
+      } else if (msg?.msg) {
+        messageApi.error(msg.msg);
+      }
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  function confirmRemoveUser(row: PanelUser) {
+    modal.confirm({
+      title: `${t('delete')} "${row.username}"?`,
+      content: t('pages.settings.users.removeWarning'),
+      okText: t('delete'),
+      cancelText: t('cancel'),
+      okType: 'danger',
+      onOk: async () => {
+        const msg = (await HttpUtil.post(`/panel/api/users/del/${row.id}`)) as ApiMsg;
+        if (msg?.success) {
+          messageApi.success(t('pages.settings.users.toasts.deleted'));
+          await loadUsers();
+        } else if (msg?.msg) {
+          messageApi.error(msg.msg);
+        }
+      },
+    });
   }
 
   return (
@@ -320,12 +393,58 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
                 title={t('pages.settings.security.twoFactorEnable')}
                 description={t('pages.settings.security.twoFactorEnableDesc')}
               >
-                <Switch checked={allSetting.twoFactorEnable} onClick={toggleTwoFactor} />
+                <Switch checked={selfTwoFactor} onClick={toggleTwoFactor} />
               </SettingListItem>
             ),
           },
           {
             key: '3',
+            label: catTabLabel(<TeamOutlined />, t('pages.settings.users.tab'), isMobile),
+            children: (
+              <div className="api-token-section">
+                <div className="api-token-header">
+                  <p className="api-token-hint">{t('pages.settings.users.hint')}</p>
+                  <Button type="primary" size="small" onClick={openAddUser}>
+                    + {t('pages.settings.users.add')}
+                  </Button>
+                </div>
+                <Spin spinning={usersLoading}>
+                  {users.map((row) => (
+                    <div key={row.id} className="api-token-row">
+                      <div className="api-token-row-head">
+                        <div className="api-token-name-wrap">
+                          <span className="api-token-name">{row.username}</span>
+                          {row.isSelf ? (
+                            <span className="api-token-created">
+                              {t('pages.settings.users.you')}
+                            </span>
+                          ) : null}
+                          {row.twoFactorEnable ? (
+                            <span className="api-token-created">
+                              {t('pages.settings.security.twoFactor')}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="api-token-actions">
+                          <Button
+                            size="small"
+                            danger
+                            type="text"
+                            disabled={row.isSelf}
+                            onClick={() => confirmRemoveUser(row)}
+                          >
+                            {t('delete')}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </Spin>
+              </div>
+            ),
+          },
+          {
+            key: '4',
             label: catTabLabel(<ApiOutlined />, t('pages.nodes.apiToken'), isMobile),
             children: (
               <div className="api-token-section">
@@ -336,11 +455,6 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
                   </Button>
                 </div>
                 <Spin spinning={apiTokensLoading}>
-                  {!apiTokens.length && !apiTokensLoading && (
-                    <Empty
-                      description={t('pages.settings.security.apiTokenEmpty') || 'No tokens yet'}
-                    />
-                  )}
                   {apiTokens.map((row) => (
                     <div key={row.id} className={`api-token-row${row.enabled ? '' : ' disabled'}`}>
                       <div className="api-token-row-head">
@@ -374,6 +488,35 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
           },
         ]}
       />
+
+      <Modal
+        open={addOpen}
+        title={t('pages.settings.users.add')}
+        confirmLoading={adding}
+        okText={t('confirm')}
+        cancelText={t('cancel')}
+        onOk={confirmAddUser}
+        onCancel={() => setAddOpen(false)}
+      >
+        <p className="api-token-hint">{t('pages.settings.users.addHint')}</p>
+        <Form layout="vertical">
+          <Form.Item label={t('username')} required>
+            <Input
+              value={addUsername}
+              maxLength={64}
+              autoComplete="off"
+              onChange={(e) => setAddUsername(e.target.value)}
+            />
+          </Form.Item>
+          <Form.Item label={t('password')} required>
+            <Input.Password
+              value={addPassword}
+              autoComplete="new-password"
+              onChange={(e) => setAddPassword(e.target.value)}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         open={createOpen}

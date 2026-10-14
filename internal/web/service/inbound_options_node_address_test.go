@@ -49,7 +49,7 @@ func TestGetInboundOptions_NodeAddress(t *testing.T) {
 	}
 
 	svc := &InboundService{}
-	options, err := svc.GetInboundOptions(1)
+	options, err := svc.GetInboundOptions()
 	if err != nil {
 		t.Fatalf("GetInboundOptions: %v", err)
 	}

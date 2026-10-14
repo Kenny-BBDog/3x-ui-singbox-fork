@@ -211,7 +211,7 @@ func TestSnapshotListNotOverlaid_SlimOverlaid(t *testing.T) {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)
 	}
 
-	full, err := svc.GetInbounds(1)
+	full, err := svc.GetInbounds()
 	if err != nil {
 		t.Fatalf("GetInbounds: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestSnapshotListNotOverlaid_SlimOverlaid(t *testing.T) {
 		t.Errorf("full list (master snapshot) must stay un-overlaid, got up=%d", full[0].ClientStats[0].Up)
 	}
 
-	slim, err := svc.GetInboundsSlim(1)
+	slim, err := svc.GetInboundsSlim()
 	if err != nil {
 		t.Fatalf("GetInboundsSlim: %v", err)
 	}

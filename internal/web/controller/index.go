@@ -185,8 +185,9 @@ func (a *IndexController) csrfToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "obj": token})
 }
 
-// getTwoFactorEnable retrieves the current status of two-factor authentication.
+// getTwoFactorEnable reports whether any account carries a second factor, which
+// is all the login page can know before the password is checked.
 func (a *IndexController) getTwoFactorEnable(c *gin.Context) {
-	status, err := a.settingService.GetTwoFactorEnable()
+	status, err := a.userService.AnyTwoFactorEnabled()
 	jsonObj(c, status, err)
 }

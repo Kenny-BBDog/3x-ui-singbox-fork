@@ -139,7 +139,8 @@
         "emptyPassword": "Şifre zorunludur",
         "wrongUsernameOrPassword": "Geçersiz kullanıcı adı, şifre veya iki adımlı doğrulama kodu.",
         "successLogin": "Hesabınıza başarıyla giriş yaptınız."
-      }
+      },
+      "twoFactorCodeOptional": "Bu hesapta doğrulayıcı yoksa boş bırakın."
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "DoH sunucu URL'si, genelde /dns-query ile biter.",
       "subIncyResolveDnsIp": "DoH sunucu IP'si",
       "subIncyResolveDnsIpDesc": "Bootstrap için DoH sunucu IP'si.",
-      "subIncyGroupRouting": "Yönlendirme"
+      "subIncyGroupRouting": "Yönlendirme",
+      "users": {
+        "tab": "Yöneticiler",
+        "hint": "Buradaki her hesap panelin tamamını yönetir: aynı gelen bağlantılar, istemciler ve ayarlar.",
+        "add": "Yönetici ekle",
+        "you": "Siz",
+        "removeWarning": "Erişimi hemen kaybeder. Bu geri alınamaz.",
+        "addHint": "Yeni hesap iki adımlı doğrulama olmadan giriş yapar. Sahibi Güvenlik bölümünden ekleyebilir.",
+        "toasts": {
+          "added": "Yönetici eklendi",
+          "deleted": "Yönetici kaldırıldı",
+          "failed": "Yöneticiler güncellenemedi",
+          "twoFactorSaved": "İki adımlı doğrulama ayarı kaydedildi"
+        }
+      }
     },
     "xray": {
       "save": "Kaydet",

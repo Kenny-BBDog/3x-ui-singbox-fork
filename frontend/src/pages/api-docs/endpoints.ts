@@ -1658,6 +1658,46 @@ export const sections: readonly Section[] = [
   },
 
   {
+    id: 'administrators',
+    title: 'Administrators',
+    description:
+      'Manage the panel’s own accounts. All endpoints under /panel/api/users. Every account administers the whole panel, and the second factor belongs to the account rather than to the panel.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/users/list',
+        summary:
+          'List the panel’s administrator accounts. Every account has the same reach over the panel, so the response marks which row is the caller — the UI withholds the remove action for it. Neither the password hash nor the authenticator secret is included.',
+        response:
+          '{\n  "success": true,\n  "obj": [\n    { "id": 1, "username": "admin", "twoFactorEnable": true, "isSelf": true },\n    { "id": 2, "username": "ops", "twoFactorEnable": false, "isSelf": false }\n  ]\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/users/add',
+        summary:
+          'Add an administrator account. The account starts without a second factor: the operator adding it is handing over access, not binding an authenticator, which only the account’s own holder should do. Rejects a blank or duplicate username.',
+        body: '{\n  "username": "ops",\n  "password": "…"\n}',
+        response:
+          '{\n  "success": true,\n  "obj": { "id": 2, "username": "ops", "twoFactorEnable": false, "isSelf": false }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/users/del/:id',
+        summary:
+          'Remove an administrator account. The account you are signed in with cannot be removed — the session is keyed on that row — so the panel is never left without the account making the change.',
+        params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Account id.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/users/twoFactor',
+        summary:
+          'Bind or clear the signed-in account’s own authenticator. Changing a factor that is already set requires a current code (GHSA-xqqw-jqqv-99h6), enabling without a secret is refused because the login check would then demand a code no authenticator can produce, and enabling ends that account’s other sessions.',
+        body: '{\n  "enable": true,\n  "token": "JBSWY3DPEHPK3PXP",\n  "code": "123456"\n}',
+      },
+    ],
+  },
+
+  {
     id: 'nodes',
     title: 'Nodes',
     description:

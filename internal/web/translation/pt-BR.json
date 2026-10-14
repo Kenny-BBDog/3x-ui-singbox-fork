@@ -139,7 +139,8 @@
         "emptyPassword": "Senha é obrigatória",
         "wrongUsernameOrPassword": "Nome de usuário, senha ou código de dois fatores inválido.",
         "successLogin": "Você entrou na sua conta com sucesso."
-      }
+      },
+      "twoFactorCodeOptional": "Deixe em branco se esta conta não tiver autenticador."
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "URL do servidor DoH, geralmente terminando em /dns-query.",
       "subIncyResolveDnsIp": "IP do servidor DoH",
       "subIncyResolveDnsIpDesc": "IP do servidor DoH para bootstrap.",
-      "subIncyGroupRouting": "Roteamento"
+      "subIncyGroupRouting": "Roteamento",
+      "users": {
+        "tab": "Administradores",
+        "hint": "Cada conta aqui administra o painel inteiro: os mesmos inbounds, clientes e configurações.",
+        "add": "Adicionar administrador",
+        "you": "Você",
+        "removeWarning": "Ela perde o acesso imediatamente. Isso não pode ser desfeito.",
+        "addHint": "A nova conta entra sem autenticação em duas etapas. O titular pode ativá-la em Segurança.",
+        "toasts": {
+          "added": "Administrador adicionado",
+          "deleted": "Administrador removido",
+          "failed": "Não foi possível atualizar os administradores",
+          "twoFactorSaved": "Configuração de dois fatores salva"
+        }
+      }
     },
     "xray": {
       "importRules": "Importar regras",

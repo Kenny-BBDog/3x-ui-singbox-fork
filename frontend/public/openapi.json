@@ -566,12 +566,6 @@
           "trustedProxyCIDRs": {
             "type": "string"
           },
-          "twoFactorEnable": {
-            "type": "boolean"
-          },
-          "twoFactorToken": {
-            "type": "string"
-          },
           "warpUpdateInterval": {
             "minimum": 0,
             "type": "integer"
@@ -766,8 +760,6 @@
           "timeLocation",
           "trafficDiff",
           "trustedProxyCIDRs",
-          "twoFactorEnable",
-          "twoFactorToken",
           "warpUpdateInterval",
           "webBasePath",
           "webCertFile",
@@ -849,9 +841,6 @@
             "type": "boolean"
           },
           "hasTgBotToken": {
-            "type": "boolean"
-          },
-          "hasTwoFactorToken": {
             "type": "boolean"
           },
           "hasWarpSecret": {
@@ -1342,12 +1331,6 @@
           "trustedProxyCIDRs": {
             "type": "string"
           },
-          "twoFactorEnable": {
-            "type": "boolean"
-          },
-          "twoFactorToken": {
-            "type": "string"
-          },
           "warpUpdateInterval": {
             "minimum": 0,
             "type": "integer"
@@ -1396,7 +1379,6 @@
           "hasNordSecret",
           "hasSmtpPassword",
           "hasTgBotToken",
-          "hasTwoFactorToken",
           "hasWarpSecret",
           "ipLimitAllowlist",
           "ldapAutoCreate",
@@ -1550,8 +1532,6 @@
           "timeLocation",
           "trafficDiff",
           "trustedProxyCIDRs",
-          "twoFactorEnable",
-          "twoFactorToken",
           "warpUpdateInterval",
           "webBasePath",
           "webCertFile",
@@ -4781,13 +4761,16 @@
         "type": "object"
       },
       "User": {
-        "description": "User represents a user account in the 3x-ui panel.",
+        "description": "User represents a user account in the 3x-ui panel. Every user is an\nadministrator over the whole panel; the second factor is per user so one\noperator can carry an authenticator while another works without one.",
         "properties": {
           "id": {
             "type": "integer"
           },
           "password": {
             "type": "string"
+          },
+          "twoFactorEnable": {
+            "type": "boolean"
           },
           "username": {
             "type": "string"
@@ -4796,6 +4779,7 @@
         "required": [
           "id",
           "password",
+          "twoFactorEnable",
           "username"
         ],
         "type": "object"
@@ -4858,6 +4842,10 @@
     {
       "name": "Clients",
       "description": "Manage clients as first-class entities that can be attached to one or more inbounds. A single client row drives the settings.clients entry in every inbound it belongs to. Endpoints live under /panel/api/clients."
+    },
+    {
+      "name": "Administrators",
+      "description": "Manage the panel’s own accounts. All endpoints under /panel/api/users. Every account administers the whole panel, and the second factor belongs to the account rather than to the panel."
     },
     {
       "name": "Nodes",
@@ -10969,6 +10957,192 @@
                   "obj": [
                     "vless://uuid@host:443?...#user1"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/users/list": {
+      "get": {
+        "tags": [
+          "Administrators"
+        ],
+        "summary": "List the panel’s administrator accounts. Every account has the same reach over the panel, so the response marks which row is the caller — the UI withholds the remove action for it. Neither the password hash nor the authenticator secret is included.",
+        "operationId": "get_panel_api_users_list",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "id": 1,
+                      "username": "admin",
+                      "twoFactorEnable": true,
+                      "isSelf": true
+                    },
+                    {
+                      "id": 2,
+                      "username": "ops",
+                      "twoFactorEnable": false,
+                      "isSelf": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/users/add": {
+      "post": {
+        "tags": [
+          "Administrators"
+        ],
+        "summary": "Add an administrator account. The account starts without a second factor: the operator adding it is handing over access, not binding an authenticator, which only the account’s own holder should do. Rejects a blank or duplicate username.",
+        "operationId": "post_panel_api_users_add",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "username": "ops",
+                "password": "…"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "id": 2,
+                    "username": "ops",
+                    "twoFactorEnable": false,
+                    "isSelf": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/users/del/{id}": {
+      "post": {
+        "tags": [
+          "Administrators"
+        ],
+        "summary": "Remove an administrator account. The account you are signed in with cannot be removed — the session is keyed on that row — so the panel is never left without the account making the change.",
+        "operationId": "post_panel_api_users_del_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Account id.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/users/twoFactor": {
+      "post": {
+        "tags": [
+          "Administrators"
+        ],
+        "summary": "Bind or clear the signed-in account’s own authenticator. Changing a factor that is already set requires a current code (GHSA-xqqw-jqqv-99h6), enabling without a secret is refused because the login check would then demand a code no authenticator can produce, and enabling ends that account’s other sessions.",
+        "operationId": "post_panel_api_users_twoFactor",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "enable": true,
+                "token": "JBSWY3DPEHPK3PXP",
+                "code": "123456"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
                 }
               }
             }

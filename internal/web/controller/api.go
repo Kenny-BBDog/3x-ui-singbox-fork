@@ -190,6 +190,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	NewClientController(clients)
 	NewGroupController(clients)
 
+	// Panel administrator accounts
+	users := api.Group("/users")
+	NewUserController(users)
+
 	// Server API
 	server := api.Group("/server")
 	a.serverController = NewServerController(server)

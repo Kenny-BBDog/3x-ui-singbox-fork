@@ -139,7 +139,8 @@
         "emptyPassword": "Password is required",
         "wrongUsernameOrPassword": "Invalid username or password or two-factor code.",
         "successLogin": "You have successfully logged into your account."
-      }
+      },
+      "twoFactorCodeOptional": "Leave blank if this account has no authenticator."
     },
     "index": {
       "cpu": "CPU",
@@ -1859,7 +1860,21 @@
       "subIncyResolveDnsDomainDesc": "DoH server URL, usually ending in /dns-query.",
       "subIncyResolveDnsIp": "DoH server IP",
       "subIncyResolveDnsIpDesc": "IP of the DoH server, used for bootstrap.",
-      "subIncyGroupRouting": "Routing"
+      "subIncyGroupRouting": "Routing",
+      "users": {
+        "tab": "Administrators",
+        "hint": "Every account here administers the whole panel — the same inbounds, clients and settings.",
+        "add": "Add administrator",
+        "you": "You",
+        "removeWarning": "They lose access immediately. This cannot be undone.",
+        "addHint": "The new account signs in without two-factor authentication. Its holder can add one under Security.",
+        "toasts": {
+          "added": "Administrator added",
+          "deleted": "Administrator removed",
+          "failed": "Could not update administrators",
+          "twoFactorSaved": "Two-factor setting saved"
+        }
+      }
     },
     "xray": {
       "save": "Save",

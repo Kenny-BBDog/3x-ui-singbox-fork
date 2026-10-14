@@ -25,7 +25,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netproxy"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/reflect_util"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/totp"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray/dnsconf"
@@ -352,7 +351,6 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	}
 	view := &entity.AllSettingView{AllSetting: *allSetting}
 	view.HasTgBotToken = secretConfigured(allSetting.TgBotToken)
-	view.HasTwoFactorToken = secretConfigured(allSetting.TwoFactorToken)
 	view.HasLdapPassword = secretConfigured(allSetting.LdapPassword)
 	view.HasWarpSecret = secretConfigured(mustString(s.GetWarp()))
 	view.HasNordSecret = secretConfigured(mustString(s.GetNord()))
@@ -363,7 +361,6 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 		view.HasApiToken = apiTokenCount > 0
 	}
 	view.TgBotToken = ""
-	view.TwoFactorToken = ""
 	view.LdapPassword = ""
 	view.SmtpPassword = ""
 	view.DiscordBotToken = ""
@@ -669,40 +666,6 @@ func (s *SettingService) SetTgMemory(value int) error {
 
 func (s *SettingService) GetTgLang() (string, error) {
 	return s.getString("tgLang")
-}
-
-func (s *SettingService) GetTwoFactorEnable() (bool, error) {
-	return s.getBool("twoFactorEnable")
-}
-
-func (s *SettingService) SetTwoFactorEnable(value bool) error {
-	return s.setBool("twoFactorEnable", value)
-}
-
-func (s *SettingService) GetTwoFactorToken() (string, error) {
-	return s.getString("twoFactorToken")
-}
-
-func (s *SettingService) SetTwoFactorToken(value string) error {
-	return s.setString("twoFactorToken", value)
-}
-
-func (s *SettingService) VerifyTwoFactorCode(code string) error {
-	enabled, err := s.GetTwoFactorEnable()
-	if err != nil {
-		return err
-	}
-	if !enabled {
-		return nil
-	}
-	token, err := s.GetTwoFactorToken()
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(token) == "" || !totp.VerifyWithSkew(token, strings.TrimSpace(code), time.Now()) {
-		return common.NewError("invalid two factor code")
-	}
-	return nil
 }
 
 func (s *SettingService) GetPort() (int, error) {
@@ -1772,13 +1735,6 @@ func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting, 
 			return err
 		}
 		allSetting.LdapPassword = value
-	}
-	if allSetting.TwoFactorEnable && strings.TrimSpace(allSetting.TwoFactorToken) == "" {
-		value, err := s.GetTwoFactorToken()
-		if err != nil {
-			return err
-		}
-		allSetting.TwoFactorToken = value
 	}
 	if !clears.SmtpPassword && strings.TrimSpace(allSetting.SmtpPassword) == "" {
 		value, err := s.GetSmtpPassword()

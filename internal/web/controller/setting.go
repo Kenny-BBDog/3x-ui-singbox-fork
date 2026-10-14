@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -30,16 +29,15 @@ type updateUserForm struct {
 }
 
 // updateSettingForm carries the persisted settings plus request-scoped fields
-// that must never land in the settings table: the 2FA confirmation code and
-// the explicit clear flags for redacted secrets (a blank secret alone means
-// "unchanged", so clearing needs its own signal — see #5724).
+// that must never land in the settings table: the explicit clear flags for
+// redacted secrets (a blank secret alone means "unchanged", so clearing needs
+// its own signal — see #5724).
 type updateSettingForm struct {
 	entity.AllSetting
-	TwoFactorCode        string `json:"twoFactorCode" form:"twoFactorCode"`
-	ClearTgBotToken      bool   `json:"clearTgBotToken" form:"clearTgBotToken"`
-	ClearLdapPassword    bool   `json:"clearLdapPassword" form:"clearLdapPassword"`
-	ClearSmtpPassword    bool   `json:"clearSmtpPassword" form:"clearSmtpPassword"`
-	ClearDiscordBotToken bool   `json:"clearDiscordBotToken" form:"clearDiscordBotToken"`
+	ClearTgBotToken      bool `json:"clearTgBotToken" form:"clearTgBotToken"`
+	ClearLdapPassword    bool `json:"clearLdapPassword" form:"clearLdapPassword"`
+	ClearSmtpPassword    bool `json:"clearSmtpPassword" form:"clearSmtpPassword"`
+	ClearDiscordBotToken bool `json:"clearDiscordBotToken" form:"clearDiscordBotToken"`
 }
 
 type validateRegexForm struct {
@@ -128,7 +126,6 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		return
 	}
 	allSetting := &form.AllSetting
-	oldTwoFactor, twoFactorErr := a.settingService.GetTwoFactorEnable()
 	oldPanelOutbound, _ := a.settingService.GetPanelOutbound()
 	oldTgEnable, _ := a.settingService.GetTgbotEnabled()
 	oldTgToken, _ := a.settingService.GetTgBotToken()
@@ -138,29 +135,12 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 	oldDiscordToken, _ := a.settingService.GetDiscordBotToken()
 	oldDiscordChannelId, _ := a.settingService.GetDiscordChannelId()
 	oldDiscordRunTime, _ := a.settingService.GetDiscordRunTime()
-	if twoFactorErr == nil && oldTwoFactor {
-		// Rebinding the authenticator is the same class of change as turning 2FA
-		// off, so both need a current code. Blank still means "unchanged".
-		submittedToken := strings.TrimSpace(allSetting.TwoFactorToken)
-		storedToken, _ := a.settingService.GetTwoFactorToken()
-		if !allSetting.TwoFactorEnable || (submittedToken != "" && submittedToken != storedToken) {
-			if err := a.settingService.VerifyTwoFactorCode(form.TwoFactorCode); err != nil {
-				jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-				return
-			}
-		}
-	}
 	err := a.settingService.UpdateAllSetting(allSetting, service.SecretClears{
 		TgBotToken:      form.ClearTgBotToken,
 		LdapPassword:    form.ClearLdapPassword,
 		SmtpPassword:    form.ClearSmtpPassword,
 		DiscordBotToken: form.ClearDiscordBotToken,
 	})
-	if err == nil && twoFactorErr == nil && !oldTwoFactor && allSetting.TwoFactorEnable {
-		if bumpErr := a.userService.BumpLoginEpoch(); bumpErr != nil {
-			err = bumpErr
-		}
-	}
 	if err == nil && form.PanelOutbound != oldPanelOutbound {
 		// The egress bridge lives in the generated config; reconcile the
 		// running core. One SOCKS inbound plus one routing rule — both
@@ -208,11 +188,9 @@ func (a *SettingController) updateUser(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUserError"), errors.New(I18nWeb(c, "pages.settings.toasts.userPassMustBeNotEmpty")))
 		return
 	}
-	if err := a.settingService.VerifyTwoFactorCode(form.TwoFactorCode); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUserError"), err)
-		return
-	}
-	err = a.userService.UpdateUser(user.Id, form.NewUsername, form.NewPassword)
+	// UpdateUser re-checks the code itself, because it also drops the second
+	// factor that the credentials were protecting.
+	err = a.userService.UpdateUser(user.Id, form.NewUsername, form.NewPassword, form.TwoFactorCode)
 	if err == nil {
 		user.Username = form.NewUsername
 		user.Password, _ = crypto.HashPasswordAsBcrypt(form.NewPassword)

@@ -540,12 +540,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "trustedProxyCIDRs": {
         "type": "string"
       },
-      "twoFactorEnable": {
-        "type": "boolean"
-      },
-      "twoFactorToken": {
-        "type": "string"
-      },
       "warpUpdateInterval": {
         "minimum": 0,
         "type": "integer"
@@ -740,8 +734,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "timeLocation",
       "trafficDiff",
       "trustedProxyCIDRs",
-      "twoFactorEnable",
-      "twoFactorToken",
       "warpUpdateInterval",
       "webBasePath",
       "webCertFile",
@@ -823,9 +815,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "boolean"
       },
       "hasTgBotToken": {
-        "type": "boolean"
-      },
-      "hasTwoFactorToken": {
         "type": "boolean"
       },
       "hasWarpSecret": {
@@ -1316,12 +1305,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "trustedProxyCIDRs": {
         "type": "string"
       },
-      "twoFactorEnable": {
-        "type": "boolean"
-      },
-      "twoFactorToken": {
-        "type": "string"
-      },
       "warpUpdateInterval": {
         "minimum": 0,
         "type": "integer"
@@ -1370,7 +1353,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "hasNordSecret",
       "hasSmtpPassword",
       "hasTgBotToken",
-      "hasTwoFactorToken",
       "hasWarpSecret",
       "ipLimitAllowlist",
       "ldapAutoCreate",
@@ -1524,8 +1506,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "timeLocation",
       "trafficDiff",
       "trustedProxyCIDRs",
-      "twoFactorEnable",
-      "twoFactorToken",
       "warpUpdateInterval",
       "webBasePath",
       "webCertFile",
@@ -4755,13 +4735,16 @@ export const SCHEMAS: Record<string, unknown> = {
     "type": "object"
   },
   "User": {
-    "description": "User represents a user account in the 3x-ui panel.",
+    "description": "User represents a user account in the 3x-ui panel. Every user is an\nadministrator over the whole panel; the second factor is per user so one\noperator can carry an authenticator while another works without one.",
     "properties": {
       "id": {
         "type": "integer"
       },
       "password": {
         "type": "string"
+      },
+      "twoFactorEnable": {
+        "type": "boolean"
       },
       "username": {
         "type": "string"
@@ -4770,6 +4753,7 @@ export const SCHEMAS: Record<string, unknown> = {
     "required": [
       "id",
       "password",
+      "twoFactorEnable",
       "username"
     ],
     "type": "object"

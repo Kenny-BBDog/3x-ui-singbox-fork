@@ -234,6 +234,9 @@ func initModels() error {
 	if err := migrateApiTokenScopeAndExpiry(); err != nil {
 		return err
 	}
+	if err := migrateUserTwoFactorColumns(); err != nil {
+		return err
+	}
 	if err := dropLegacyForeignKeys(); err != nil {
 		return err
 	}
@@ -2871,6 +2874,54 @@ func migrateApiTokenScopeAndExpiry() error {
 	}
 	return db.Model(&model.ApiToken{}).Where("scope IS NULL OR TRIM(scope) = ''").
 		Updates(map[string]any{"scope": model.ApiScopeAdmin, "expires_at": 0}).Error
+}
+
+// migrateUserTwoFactorColumns moves the panel-wide second factor onto the first
+// account. That account is the one that already had a working authenticator, so
+// moving the secret is what keeps its holder able to sign in. The settings rows
+// are left untouched: nothing reads them any more, and an older binary rolled
+// back onto this database still finds the factor where it left it.
+func migrateUserTwoFactorColumns() error {
+	m := db.Migrator()
+	if !m.HasTable(&model.User{}) {
+		return nil
+	}
+	if !m.HasColumn(&model.User{}, "TwoFactorEnable") {
+		if err := m.AddColumn(&model.User{}, "TwoFactorEnable"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.User{}, "TwoFactorToken") {
+		if err := m.AddColumn(&model.User{}, "TwoFactorToken"); err != nil {
+			return err
+		}
+	}
+
+	var first model.User
+	if err := db.Order("id ASC").First(&first).Error; err != nil {
+		return nil // no account yet; the setup flow creates one
+	}
+	if first.TwoFactorToken != "" {
+		return nil // already migrated
+	}
+
+	var enabled model.Setting
+	if err := db.Model(model.Setting{}).Where("key = ?", "twoFactorEnable").First(&enabled).Error; err != nil {
+		return nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(enabled.Value), "true") {
+		return nil
+	}
+	var token model.Setting
+	if err := db.Model(model.Setting{}).Where("key = ?", "twoFactorToken").First(&token).Error; err != nil {
+		return nil
+	}
+	if strings.TrimSpace(token.Value) == "" {
+		return nil
+	}
+
+	return db.Model(&model.User{}).Where("id = ?", first.Id).
+		Updates(map[string]any{"two_factor_enable": true, "two_factor_token": token.Value}).Error
 }
 
 // openPostgresWithRetry retries the initial PostgreSQL connection with

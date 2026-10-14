@@ -401,12 +401,14 @@ func updateSetting(port int, username string, password string, webBasePath strin
 	}
 
 	if resetTwoFactor {
-		err := settingService.SetTwoFactorEnable(false)
+		// Clears every account: this is the way back in for an operator who has
+		// lost the authenticator, so it must not leave a factor standing.
+		userService := panel.UserService{}
+		err := userService.ResetAllTwoFactor()
 
 		if err != nil {
 			fmt.Println("Failed to reset two-factor authentication:", err)
 		} else {
-			_ = settingService.SetTwoFactorToken("")
 			fmt.Println("Two-factor authentication reset successfully")
 		}
 	}

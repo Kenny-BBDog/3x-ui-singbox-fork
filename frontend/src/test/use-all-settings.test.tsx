@@ -164,8 +164,6 @@ describe('useAllSettings', () => {
     await act(async () => {
       await result.current.savePayload({
         ...result.current.allSetting,
-        twoFactorEnable: false,
-        twoFactorToken: '',
       });
     });
 

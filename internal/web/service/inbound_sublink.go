@@ -24,11 +24,11 @@ func (s *InboundService) GetSubLinks(host, subId string) ([]string, error) {
 	return registeredSubLinkProvider.SubLinksForSubId(host, subId)
 }
 
-func (s *InboundService) GetAllInboundLinks(host string, userId int) ([]string, error) {
+func (s *InboundService) GetAllInboundLinks(host string) ([]string, error) {
 	if registeredSubLinkProvider == nil {
 		return nil, common.NewError("sub link provider not registered")
 	}
-	inbounds, err := s.GetInbounds(userId)
+	inbounds, err := s.GetInbounds()
 	if err != nil {
 		return nil, err
 	}

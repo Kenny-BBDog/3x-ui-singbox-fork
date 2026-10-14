@@ -80,9 +80,7 @@ type AllSetting struct {
 
 	OutboundDownThreshold int `json:"outboundDownThreshold" form:"outboundDownThreshold" validate:"gte=1,lte=100"`
 
-	TimeLocation    string `json:"timeLocation" form:"timeLocation"`
-	TwoFactorEnable bool   `json:"twoFactorEnable" form:"twoFactorEnable"`
-	TwoFactorToken  string `json:"twoFactorToken" form:"twoFactorToken"`
+	TimeLocation string `json:"timeLocation" form:"timeLocation"`
 
 	HappLinkEnable              bool   `json:"happLinkEnable" form:"happLinkEnable"`
 	SubEnable                   bool   `json:"subEnable" form:"subEnable"`
@@ -216,7 +214,6 @@ type AllSettingView struct {
 	AllSetting
 
 	HasTgBotToken      bool `json:"hasTgBotToken"`
-	HasTwoFactorToken  bool `json:"hasTwoFactorToken"`
 	HasLdapPassword    bool `json:"hasLdapPassword"`
 	HasApiToken        bool `json:"hasApiToken"`
 	HasWarpSecret      bool `json:"hasWarpSecret"`

@@ -178,8 +178,6 @@ export interface AllSetting {
   timeLocation: string;
   trafficDiff: number;
   trustedProxyCIDRs: string;
-  twoFactorEnable: boolean;
-  twoFactorToken: string;
   warpUpdateInterval: number;
   webBasePath: string;
   webCertFile: string;
@@ -212,7 +210,6 @@ export interface AllSettingView {
   hasNordSecret: boolean;
   hasSmtpPassword: boolean;
   hasTgBotToken: boolean;
-  hasTwoFactorToken: boolean;
   hasWarpSecret: boolean;
   ipLimitAllowlist: string;
   ldapAutoCreate: boolean;
@@ -366,8 +363,6 @@ export interface AllSettingView {
   timeLocation: string;
   trafficDiff: number;
   trustedProxyCIDRs: string;
-  twoFactorEnable: boolean;
-  twoFactorToken: string;
   warpUpdateInterval: number;
   webBasePath: string;
   webCertFile: string;
@@ -1091,6 +1086,7 @@ export interface TuicServerSettings {
 export interface User {
   id: number;
   password: string;
+  twoFactorEnable: boolean;
   username: string;
 }
 

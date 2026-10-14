@@ -139,7 +139,8 @@
         "emptyPassword": "パスワードを入力してください",
         "wrongUsernameOrPassword": "ユーザー名、パスワード、または二段階認証コードが無効です。",
         "successLogin": "アカウントに正常にログインしました。"
-      }
+      },
+      "twoFactorCodeOptional": "このアカウントに認証器がない場合は空欄のままにしてください。"
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "DoH サーバー URL。通常は /dns-query で終わります。",
       "subIncyResolveDnsIp": "DoH サーバー IP",
       "subIncyResolveDnsIpDesc": "ブートストラップ用の DoH サーバー IP。",
-      "subIncyGroupRouting": "ルーティング"
+      "subIncyGroupRouting": "ルーティング",
+      "users": {
+        "tab": "管理者",
+        "hint": "ここにある各アカウントはパネル全体を管理します。インバウンド、クライアント、設定は共通です。",
+        "add": "管理者を追加",
+        "you": "自分",
+        "removeWarning": "すぐにアクセスできなくなります。元に戻せません。",
+        "addHint": "新しいアカウントは二要素認証なしでログインします。本人が「セキュリティ」で設定できます。",
+        "toasts": {
+          "added": "管理者を追加しました",
+          "deleted": "管理者を削除しました",
+          "failed": "管理者を更新できませんでした",
+          "twoFactorSaved": "二要素認証の設定を保存しました"
+        }
+      }
     },
     "xray": {
       "importRules": "ルールをインポート",

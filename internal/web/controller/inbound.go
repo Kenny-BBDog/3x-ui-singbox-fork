@@ -36,15 +36,15 @@ func NewInboundController(g *gin.RouterGroup) *InboundController {
 // Mirrors the same heuristic used by the periodic traffic job.
 const broadcastInboundsUpdateClientLimit = 5000
 
-// broadcastInboundsUpdate fetches and broadcasts the inbound list for userId.
+// broadcastInboundsUpdate fetches and broadcasts the panel's inbound list.
 // At scale (10k+ clients) the marshaled JSON exceeds the WS payload ceiling,
 // so we send an invalidate signal instead — frontend re-fetches via REST.
 // Skipped entirely when no WebSocket clients are connected.
-func (a *InboundController) broadcastInboundsUpdate(userId int) {
+func (a *InboundController) broadcastInboundsUpdate() {
 	if !websocket.HasClients() {
 		return
 	}
-	inbounds, err := a.inboundService.GetInbounds(userId)
+	inbounds, err := a.inboundService.GetInbounds()
 	if err != nil {
 		return
 	}
@@ -91,10 +91,9 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/pushClientTraffics", a.pushClientTraffics)
 }
 
-// getInbounds retrieves the list of inbounds for the logged-in user.
+// getInbounds retrieves the list of inbounds on the panel.
 func (a *InboundController) getInbounds(c *gin.Context) {
-	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInbounds(user.Id)
+	inbounds, err := a.inboundService.GetInbounds()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -105,8 +104,7 @@ func (a *InboundController) getInbounds(c *gin.Context) {
 // getInboundsSlim is the list-page variant that strips full client
 // payloads from settings.clients[]. Detail-view flows still use /get/:id.
 func (a *InboundController) getInboundsSlim(c *gin.Context) {
-	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInboundsSlim(user.Id)
+	inbounds, err := a.inboundService.GetInboundsSlim()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -118,8 +116,7 @@ func (a *InboundController) getInboundsSlim(c *gin.Context) {
 // rendered through the same subscription engine the client pages use so the
 // remark template (name-only display part) is applied consistently.
 func (a *InboundController) getAllInboundLinks(c *gin.Context) {
-	user := session.GetLoginUser(c)
-	links, err := a.inboundService.GetAllInboundLinks(resolveHost(c), user.Id)
+	links, err := a.inboundService.GetAllInboundLinks(resolveHost(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -127,12 +124,11 @@ func (a *InboundController) getAllInboundLinks(c *gin.Context) {
 	jsonObj(c, links, nil)
 }
 
-// getInboundOptions returns a lightweight projection of the user's inbounds
+// getInboundOptions returns a lightweight projection of the panel's inbounds
 // (id, remark, protocol, port, tlsFlowCapable) for pickers in the clients UI.
 // Avoids shipping per-client settings and traffic stats just to fill a dropdown.
 func (a *InboundController) getInboundOptions(c *gin.Context) {
-	user := session.GetLoginUser(c)
-	options, err := a.inboundService.GetInboundOptions(user.Id)
+	options, err := a.inboundService.GetInboundOptions()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -180,7 +176,7 @@ func (a *InboundController) addInbound(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
-	a.broadcastInboundsUpdate(user.Id)
+	a.broadcastInboundsUpdate()
 	notifyClientsChanged()
 }
 
@@ -200,8 +196,7 @@ func (a *InboundController) delInbound(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
-	user := session.GetLoginUser(c)
-	a.broadcastInboundsUpdate(user.Id)
+	a.broadcastInboundsUpdate()
 	notifyClientsChanged()
 }
 
@@ -226,8 +221,7 @@ func (a *InboundController) bulkDelInbounds(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
-	user := session.GetLoginUser(c)
-	a.broadcastInboundsUpdate(user.Id)
+	a.broadcastInboundsUpdate()
 	notifyClientsChanged()
 }
 
@@ -260,8 +254,7 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
-	user := session.GetLoginUser(c)
-	a.broadcastInboundsUpdate(user.Id)
+	a.broadcastInboundsUpdate()
 	notifyClientsChanged()
 }
 
@@ -366,8 +359,7 @@ func (a *InboundController) delAllInboundClients(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
-	user := session.GetLoginUser(c)
-	a.broadcastInboundsUpdate(user.Id)
+	a.broadcastInboundsUpdate()
 	notifyClientsChanged()
 }
 
@@ -438,7 +430,7 @@ func (a *InboundController) importInbound(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
-	a.broadcastInboundsUpdate(user.Id)
+	a.broadcastInboundsUpdate()
 	notifyClientsChanged()
 }
 

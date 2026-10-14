@@ -196,8 +196,6 @@ export const AllSettingSchema = z.object({
   timeLocation: z.string(),
   trafficDiff: z.number().int().min(0).max(100),
   trustedProxyCIDRs: z.string(),
-  twoFactorEnable: z.boolean(),
-  twoFactorToken: z.string(),
   warpUpdateInterval: z.number().int().min(0),
   webBasePath: z.string(),
   webCertFile: z.string(),
@@ -231,7 +229,6 @@ export const AllSettingViewSchema = z.object({
   hasNordSecret: z.boolean(),
   hasSmtpPassword: z.boolean(),
   hasTgBotToken: z.boolean(),
-  hasTwoFactorToken: z.boolean(),
   hasWarpSecret: z.boolean(),
   ipLimitAllowlist: z.string(),
   ldapAutoCreate: z.boolean(),
@@ -385,8 +382,6 @@ export const AllSettingViewSchema = z.object({
   timeLocation: z.string(),
   trafficDiff: z.number().int().min(0).max(100),
   trustedProxyCIDRs: z.string(),
-  twoFactorEnable: z.boolean(),
-  twoFactorToken: z.string(),
   warpUpdateInterval: z.number().int().min(0),
   webBasePath: z.string(),
   webCertFile: z.string(),
@@ -1162,6 +1157,7 @@ export type TuicServerSettings = z.infer<typeof TuicServerSettingsSchema>;
 export const UserSchema = z.object({
   id: z.number().int(),
   password: z.string(),
+  twoFactorEnable: z.boolean(),
   username: z.string(),
 });
 export type User = z.infer<typeof UserSchema>;

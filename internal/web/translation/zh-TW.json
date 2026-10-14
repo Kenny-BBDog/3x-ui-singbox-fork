@@ -139,7 +139,8 @@
         "emptyPassword": "請輸入密碼",
         "wrongUsernameOrPassword": "用戶名、密碼或雙重驗證碼無效。",
         "successLogin": "您已成功登入您的帳戶。"
-      }
+      },
+      "twoFactorCodeOptional": "如果該帳號沒有綁定驗證器，留空即可。"
     },
     "index": {
       "cpu": "CPU",
@@ -1741,7 +1742,21 @@
       "subIncyResolveDnsDomainDesc": "DoH 伺服器 URL，通常以 /dns-query 結尾。",
       "subIncyResolveDnsIp": "DoH 伺服器 IP",
       "subIncyResolveDnsIpDesc": "用於引導的 DoH 伺服器 IP。",
-      "subIncyGroupRouting": "路由"
+      "subIncyGroupRouting": "路由",
+      "users": {
+        "tab": "管理員",
+        "hint": "這裡的每個帳號都管理整個面板——同一批入站、用戶端與設定。",
+        "add": "新增管理員",
+        "you": "目前帳號",
+        "removeWarning": "該帳號會立刻失去存取權限，且無法復原。",
+        "addHint": "新帳號登入時不需要兩步驗證；本人可以在「安全性」裡自行開啟。",
+        "toasts": {
+          "added": "管理員已新增",
+          "deleted": "管理員已移除",
+          "failed": "無法更新管理員",
+          "twoFactorSaved": "兩步驗證設定已儲存"
+        }
+      }
     },
     "xray": {
       "save": "儲存",
